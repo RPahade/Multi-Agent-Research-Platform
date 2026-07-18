@@ -38,9 +38,11 @@ services:
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     volumes:
-      # Live-reload friendly in dev: source is mounted over the image copy.
+      # Live-reload friendly in dev: source + migrations mounted over the image copy.
       - ./backend/app:/app/app
-    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+      - ./backend/alembic:/app/alembic
+    # Apply DB migrations, then start the API (auto-reload in dev).
+    command: ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"]
 
 volumes:
   pgdata:

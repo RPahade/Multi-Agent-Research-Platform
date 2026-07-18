@@ -14,8 +14,10 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 
-# Copy application code.
+# Copy application code and database migrations.
 COPY app ./app
+COPY alembic ./alembic
+COPY alembic.ini ./alembic.ini
 
 # Run as a non-root user for safety.
 RUN useradd --create-home --uid 1000 appuser \
