@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Local env / secrets
+.env
+
+# Tests (not needed in the runtime image)
+tests/
+
+# VCS / editors
+.git/
+.gitignore
+.vscode/
+.idea/
+
+# Docs / misc
+*.md

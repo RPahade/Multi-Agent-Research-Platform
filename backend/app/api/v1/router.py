@@ -1,0 +1,14 @@
+"""Aggregates all v1 API routers into a single router mounted by the app.
+
+New feature routers (documents, research, chat, auth, ...) get included here in
+their respective milestones, keeping ``main.py`` free of route wiring.
+"""
+
+from __future__ import annotations
+
+from fastapi import APIRouter
+
+from app.api.v1.routes import health
+
+api_router = APIRouter()
+api_router.include_router(health.router)

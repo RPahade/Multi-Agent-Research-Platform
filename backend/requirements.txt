@@ -1,0 +1,16 @@
+# --- Web framework / ASGI server ---
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+
+# --- Config & validation ---
+pydantic==2.10.4
+pydantic-settings==2.7.1
+python-dotenv==1.0.1
+
+# --- Database ---
+SQLAlchemy==2.0.36
+psycopg[binary]==3.2.3
+
+# --- Dev / test ---
+pytest==8.3.4
+httpx==0.28.1
