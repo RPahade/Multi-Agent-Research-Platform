@@ -39,6 +39,15 @@ class Job(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     current_step: Mapped[str | None] = mapped_column(String(255), nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # --- Idempotency & resilience (Milestone 5, step 2) ---
+    # Client-supplied key to de-duplicate job creation on retries.
+    idempotency_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Number of times this job has been picked up for execution.
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    max_attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("3"))
+    # Updated by the worker as it progresses; used to detect stale/dead runs.
+    last_heartbeat: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 

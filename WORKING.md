@@ -50,7 +50,11 @@ reliability, observability.
 - [x] **Milestone 2 — Database Design** ✅ DONE (schema + models + migration; verified live)
 - [x] **Milestone 3 — Authentication & RBAC** ✅ DONE (JWT access+refresh, roles, logout; verified live)
 - [x] **Milestone 4 — CRUD APIs** ✅ DONE (users/agents/tools/reports CRUD, pagination, filtering, versioning; verified live)
-- [ ] Milestone 5–8 — *(awaiting details)*
+- [x] **Milestone 5 — Background Task Execution** ✅ DONE — all 3 steps, verified live:
+  - [x] step 1/3: job creation, progress tracking, cancellation
+  - [x] step 2/3: idempotency + resilience (retries, startup recovery, reaper)
+  - [x] step 3/3: live status updates via SSE
+- [ ] Milestone 6–8 — *(awaiting details)*
 
 > The user provides milestone requirements one at a time. Do **not** build ahead of
 > the current milestone. Ask for the next milestone's details when the current is done.
@@ -120,6 +124,7 @@ d:\Multiagent\
 - `GET /api/v1/health/db` → `{status:"ok", database:"reachable"}` (runs `SELECT 1`)
 - **Auth (M3):** `POST /api/v1/auth/login` · `POST /auth/refresh` · `POST /auth/logout` · `GET /auth/me`
 - **CRUD (M4):** `/api/v1/{users,agents,tools,reports}` — `GET` (list, paginated+filtered), `GET /{id}`, `POST`, `PATCH /{id}`, `DELETE /{id}` (soft). Plus `GET /reports/{id}/versions`.
+- **Jobs (M5):** `POST /api/v1/jobs` (async; optional `Idempotency-Key` header dedups), `GET /jobs` (list/filter), `GET /jobs/{id}` (status+progress+attempts), `POST /jobs/{id}/cancel`, `GET /jobs/{id}/stream` (**SSE** live status).
 - `GET /docs` → Swagger UI (use "Authorize" with a token) · `GET /redoc` · `GET /openapi.json`
 
 ### Conventions established (follow these in future milestones)
@@ -171,6 +176,24 @@ d:\Multiagent\
 - **Report versioning**: create writes a v1 snapshot; each `PATCH` bumps `reports.version` and writes a matching `report_versions` row. `GET /reports/{id}/versions` lists history.
 - **Conventions**: entity service in `services/<entity>_service.py` (returns `(items,total)` for lists); Pydantic Create/Update/Read in `schemas/<entity>.py`; thin routers in `api/v1/routes/<entity>.py`.
 
+### Background jobs (Milestone 5 — steps 1–2 of 3 done)
+- **Execution**: in-process `ThreadPoolExecutor` in `app/services/job_runner.py` (4 workers). `POST /jobs` inserts a `pending` job and calls `job_runner.submit(id)` — returns immediately; work runs in a background thread. Executor + reaper shut down on app shutdown (lifespan).
+- **Job body**: a *simulated* multi-step pipeline (placeholder for the real agent). Tunable via `input`: `steps` (int), `step_seconds` (float), `fail` (bool), `fail_times` (int), `fail_step` (int).
+- **Progress/status**: worker writes `status` (pending→running→succeeded/failed/cancelled), `progress` 0–100, `current_step`, `started_at`/`finished_at`, `error`, `last_heartbeat`. Read via `GET /jobs/{id}`.
+- **Cancellation**: `POST /jobs/{id}/cancel` sets `status=cancelled` (pending→never starts; running→stops at next step checkpoint). All progress writes are **conditional** (`WHERE status='running'`) so a cancelled job is never resurrected. Cancelling a terminal job → 409.
+- **Idempotency (step 2)**: optional `Idempotency-Key` header on `POST /jobs`. Repeat key returns the existing job (200) — de-duped via unique `(user_id, idempotency_key)`.
+- **Resilience (step 2)**:
+  - **Retries**: `attempts`/`max_attempts` (default 3). A failed run requeues until attempts hit max, then stays `failed`. Attempt count increments on each pending→running transition.
+  - **Startup recovery**: on boot, `recover_orphans()` requeues jobs left `running` (crashed process) or `pending`, or fails them if out of attempts.
+  - **Reaper**: background thread (`start_reaper`) requeues `running` jobs whose `last_heartbeat` is older than `JOB_HEARTBEAT_STALE_SECONDS` (default 30s; interval 10s) — covers a worker that died in a still-alive process.
+- **Config**: `DEFAULT_MAX_ATTEMPTS`, `JOB_REAPER_INTERVAL_SECONDS`, `JOB_HEARTBEAT_STALE_SECONDS` in `core/config.py`.
+- **Migration**: `0003_job_resilience` added `idempotency_key`, `attempts`, `max_attempts`, `last_heartbeat`.
+- **RBAC**: create/cancel = analyst+admin (`require_job_writer`); read = any authenticated.
+- **Live status streaming (step 3)**: `GET /jobs/{id}/stream` returns **Server-Sent Events** (`text/event-stream`). Emits `{id,status,progress,current_step,attempts,error}` on each change, `: ping` keep-alive when idle, closes on terminal status. Implemented with an async generator + `asyncio.to_thread` short-lived DB reads (no new deps). Angular: consume with `EventSource`. Kafka can back this later without changing the client contract.
+- **Key files**: `services/job_runner.py`, `services/job_service.py`, `schemas/job.py`, `api/v1/routes/jobs.py`.
+
+> **Migrations don't auto-apply on hot-reload** (only on container start). After adding a migration, run `docker compose restart backend` (re-runs `alembic upgrade head`) or `docker compose exec backend alembic upgrade head`.
+
 ---
 
 ## 5. How to run
@@ -220,7 +243,12 @@ alembic upgrade head --sql                    # render SQL without a DB (offline
 | Live admin seed on start | ✅ `admin@example.com` created (admin role) |
 | Live auth flow (httpx e2e, 15 checks) | ✅ **ALL PASSED** — login, /me, RBAC 403, refresh rotation, logout revocation |
 | Live CRUD flow (httpx e2e, 25 checks) | ✅ **ALL PASSED** — pagination, filtering, RBAC per role, soft-delete, 404/422, report version snapshots |
+| Live jobs flow — M5 step 1 (httpx e2e, 13 checks) | ✅ **ALL PASSED** — async create, progress→100, cancel (not resurrected), 409 on finished, failure path, RBAC 403, filter, 404 |
+| Live jobs resilience — M5 step 2 (httpx e2e, 15 checks) | ✅ **ALL PASSED** — idempotency dedup, retries converge (attempts=3) & exhaust (failed), reaper recovers stale job, **hard-crash (SIGKILL) startup recovery** |
+| **Full M1→M5 regression (httpx e2e, 49 checks)** | ✅ **49/49 PASSED** — health, auth+RBAC, CRUD, jobs, resilience, **SSE stream** |
 | Live `/api/v1/health/db` | ✅ `200` (DB reachable) |
+
+> Note: from M5 on, e2e test data is **kept** in the DB (not cleaned up) for further testing.
 | Git commit + push to GitHub | ✅ M1 done; ⏳ M2 not yet committed/pushed |
 
 **DBeaver / psql access:** connect to `localhost:5432`, db `research`, user/pass `postgres`/`postgres`.

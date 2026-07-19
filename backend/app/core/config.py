@@ -50,6 +50,11 @@ class Settings(BaseSettings):
     first_admin_password: str | None = None
     first_admin_name: str = "Administrator"
 
+    # --- Background jobs (Milestone 5) ---
+    default_max_attempts: int = 3
+    job_reaper_interval_seconds: int = 10
+    job_heartbeat_stale_seconds: int = 30
+
     @property
     def cors_origins_list(self) -> list[str]:
         """Parse the comma-separated CORS origins into a clean list."""

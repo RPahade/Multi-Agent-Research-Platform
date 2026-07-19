@@ -28,7 +28,16 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         "%s v%s started (env=%s)", settings.app_name, settings.app_version, settings.env
     )
     _seed_first_admin()
+
+    from app.services import job_runner
+
+    job_runner.recover_orphans()  # requeue jobs left running/pending by a prior process
+    job_runner.start_reaper()  # detect & recover stale running jobs
+
     yield
+
+    job_runner.stop_reaper()
+    job_runner.shutdown()
     logger.info("%s shutting down", settings.app_name)
 
 

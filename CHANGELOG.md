@@ -57,6 +57,83 @@ Tools, Reports, Jobs), with migrations, and support for audit logging + versioni
 
 ---
 
+## [Milestone 5 — Background Task Execution] — 2026-07-19 (step-by-step)
+
+### Step 1 of 3 — job creation, progress tracking, cancellation ✅
+
+**Decisions:** in-process `ThreadPoolExecutor` (swap to a queue/Kafka in a later step);
+create/cancel = analyst+admin, read = any auth. No migration (reuses M2 `jobs` table).
+
+**Added:**
+- `services/job_runner.py` — thread-pool runner; simulated multi-step pipeline (placeholder
+  for the real agent); DB-driven progress; **cooperative cancellation** via conditional
+  updates (`WHERE status='running'`) so cancelled jobs aren't resurrected; params
+  `steps/step_seconds/fail/fail_step` in `job.input`. `submit()` + `shutdown()`.
+- `services/job_service.py` — `create_job`, `get_job`, `list_page` (filter status/type),
+  `request_cancel` (atomic pending/running → cancelled).
+- `schemas/job.py` (JobCreate, JobRead); `api/v1/routes/jobs.py`
+  (`POST /jobs`, `GET /jobs`, `GET /jobs/{id}`, `POST /jobs/{id}/cancel`); `require_job_writer` dep.
+- `main.py` lifespan shuts the executor down on app stop.
+
+**Verified (live):** httpx e2e **13/13 passed** — async create (pending→running→succeeded,
+progress 100), cancel a running job (stays cancelled, progress<100), 409 cancelling a finished
+job, simulated failure path with error, leadership create→403, status filter, unknown→404.
+Test data **kept** in DB (no cleanup from M5 onward).
+
+### Step 2 of 3 — idempotency + resilience to failures ✅
+
+**Decisions:** auto-retry with default `max_attempts=3`; reaper + startup recovery.
+
+**Added:**
+- Migration `0003_job_resilience` — `jobs.idempotency_key`, `attempts`, `max_attempts`,
+  `last_heartbeat`; unique partial index `(user_id, idempotency_key)`.
+- **Idempotency**: `Idempotency-Key` header on `POST /jobs` returns the existing job (200)
+  on repeat; `IntegrityError` on a concurrent race also returns the winner.
+- **Retries**: `job_runner` increments `attempts` on each run; `_fail_or_retry` requeues a
+  failed run until `attempts == max_attempts`, then marks `failed`. Simulated `fail_times`
+  param lets a job fail then converge.
+- **Startup recovery**: `recover_orphans()` (called in lifespan) requeues jobs left `running`
+  (crashed) or `pending`, or fails them if out of attempts.
+- **Reaper**: `start_reaper()` background thread requeues `running` jobs with a stale
+  `last_heartbeat` (defaults: interval 10s, stale 30s). `stop_reaper()` on shutdown.
+- Config: `default_max_attempts`, `job_reaper_interval_seconds`, `job_heartbeat_stale_seconds`.
+
+**Verified (live):** httpx e2e **15/15 passed** — idempotent dedup (same id, 200), retries
+converge (fail×2 → succeeded, attempts=3), retries exhaust (failed at attempts=2),
+**reaper** recovers a forced stale-running job, and **startup recovery** after a real
+`docker compose kill` (SIGKILL) re-runs the orphaned job to success (attempts=2).
+Data kept in DB.
+
+### Step 3 of 3 — live status updates for running jobs ✅
+
+**Decision:** Server-Sent Events (SSE) for one-way status push; no new deps; Kafka can back it later.
+
+**Added:**
+- `GET /jobs/{id}/stream` (`api/v1/routes/jobs.py`) — SSE `text/event-stream`. Async generator
+  emits `{id,status,progress,current_step,attempts,error}` on each change, `: ping` keep-alive
+  when idle, and closes on terminal status. Uses `asyncio.to_thread` + short-lived sessions;
+  respects client disconnect; 600s safety cap. 404 if the job doesn't exist.
+
+**Verified (live):** streamed a running job end-to-end — received multiple events, progress
+advanced monotonically to 100, final event `succeeded`.
+
+**Milestone 5 COMPLETE** (all 3 steps). Not yet wired: Kafka event bus (separate deliverable).
+
+### Full regression — Milestone 1 → 5 (2026-07-19)
+Single httpx e2e suite, **49/49 passed**:
+- **M1** (4): health, health/db, root, OpenAPI.
+- **M3** (9): admin login, wrong-password 401, /me, no-token 401, refresh rotation (old→401),
+  logout revocation, analyst/leadership login.
+- **M4** (22): pagination envelope + size, filters, analyst→/users 403, user PATCH/soft-delete/404,
+  agent RBAC + version bump, tool unique-key 409 + filter, report RBAC + version snapshots,
+  422 validation, 404.
+- **M5 step 1** (5): async create→succeeded(100%), cancel running, 409 on finished, failure path.
+- **M5 step 2** (4): idempotency dedup, retries converge (attempts=3) & exhaust (failed), reaper recovery.
+- **M5 step 3** (5): SSE 200 text/event-stream, multiple events, monotonic progress→100, terminal event.
+- (SIGKILL crash recovery validated separately in the step-2 run.)
+
+---
+
 ## [Milestone 4 — CRUD APIs] — 2026-07-19
 
 **Goal:** REST CRUD for core entities with pagination, filtering, validation, graceful errors.

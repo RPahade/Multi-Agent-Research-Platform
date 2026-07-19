@@ -66,3 +66,5 @@ def require_roles(*roles: UserRole):
 require_admin = require_roles(UserRole.ADMIN)
 # Reports may be written by analysts and admins (leadership is read-only).
 require_report_writer = require_roles(UserRole.ADMIN, UserRole.ANALYST)
+# Jobs may be created/cancelled by analysts and admins (leadership is read-only).
+require_job_writer = require_roles(UserRole.ADMIN, UserRole.ANALYST)
