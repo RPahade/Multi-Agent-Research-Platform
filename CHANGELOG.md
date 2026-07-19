@@ -57,6 +57,45 @@ Tools, Reports, Jobs), with migrations, and support for audit logging + versioni
 
 ---
 
+## [Milestone 3 — Authentication & RBAC] — 2026-07-19
+
+**Goal:** Secure JWT authentication (access + refresh) with role-based access control.
+
+### Decisions
+- **Roles:** keep 3-role enum (analyst/admin/leadership); RBAC enforces admin vs others.
+- **User creation:** admin-only (`POST /users`); first admin seeded from env on startup.
+- **Libraries:** PyJWT (tokens), bcrypt (hashing, direct — no passlib), python-multipart, email-validator.
+
+### Added
+- `app/core/security.py` — bcrypt password hash/verify; JWT create/decode for access &
+  refresh tokens (access carries `sub`+`role`; both carry `jti`+`exp`+`type`).
+- `app/models/refresh_token.py` + migration `0002_refresh_tokens` — tracks issued refresh
+  tokens (`jti` unique, `expires_at`, `revoked_at`) for rotation & logout.
+- `app/services/user_service.py` — get/create/list users + `seed_first_admin`.
+- `app/services/auth_service.py` — `authenticate`, `issue_token_pair`,
+  `rotate_refresh_token` (revoke-old-issue-new), `logout` (revoke jti).
+- `app/api/deps.py` — `get_current_user` (OAuth2 bearer), `require_roles(...)`, `require_admin`.
+- Routes: `auth.py` (`POST /auth/login|refresh|logout`, `GET /auth/me`) and
+  `users.py` (`GET/POST /users`, admin-only).
+- Schemas: `schemas/auth.py` (TokenPair, RefreshRequest), `schemas/user.py` (UserCreate, UserRead).
+- Config: JWT + first-admin settings; `.env.example` and docker-compose env updated.
+- Startup: `main.py` lifespan seeds the first admin (best-effort).
+- Tests: `tests/test_security.py` (4 unit tests, no DB).
+
+### Verified (live — real Postgres, 2026-07-19)
+- `pytest` → **11 passed**. Migrations `0001`→`0002` applied on container start; `refresh_tokens`
+  created; admin `admin@example.com` seeded.
+- End-to-end httpx flow (15 checks, **all passed**): admin login, wrong-password 401, `/me`,
+  no-token 401, admin list/create users, duplicate-email 409, analyst login,
+  **analyst→/users 403 (RBAC)**, refresh rotation (old token 401), logout (revoked token 401).
+- Test data cleaned up afterward (only seeded admin remains).
+
+### Notes for next session
+- Change `JWT_SECRET_KEY` + admin password for any non-dev use.
+- Reuse `Depends(get_current_user)` / `Depends(require_admin)` to protect future endpoints.
+
+---
+
 ## [Milestone 1 — Project Setup] — 2026-07-19
 
 **Goal:** Stand up a modular FastAPI backend skeleton with local Docker deployment,

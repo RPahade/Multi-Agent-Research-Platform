@@ -8,6 +8,7 @@ from app.models.agent import Agent, AgentTool
 from app.models.audit import AuditLog
 from app.models.base import Base
 from app.models.job import Job
+from app.models.refresh_token import RefreshToken
 from app.models.report import Report, ReportVersion
 from app.models.tool import Tool
 from app.models.user import User
@@ -22,4 +23,5 @@ __all__ = [
     "Report",
     "ReportVersion",
     "AuditLog",
+    "RefreshToken",
 ]

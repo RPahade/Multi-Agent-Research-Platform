@@ -38,6 +38,18 @@ class Settings(BaseSettings):
     # SQLAlchemy URL. Inside docker-compose the host is the ``db`` service.
     database_url: str = "postgresql+psycopg://postgres:postgres@db:5432/research"
 
+    # --- Auth / JWT ---
+    # Override in every real environment. Must be long & random.
+    jwt_secret_key: str = "dev-only-insecure-secret-change-me-please-0123456789"
+    jwt_algorithm: str = "HS256"
+    access_token_expire_minutes: int = 30
+    refresh_token_expire_days: int = 7
+
+    # --- First admin bootstrap (seeded on startup if set and not already present) ---
+    first_admin_email: str | None = None
+    first_admin_password: str | None = None
+    first_admin_name: str = "Administrator"
+
     @property
     def cors_origins_list(self) -> list[str]:
         """Parse the comma-separated CORS origins into a clean list."""

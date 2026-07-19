@@ -27,8 +27,21 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     logger.info(
         "%s v%s started (env=%s)", settings.app_name, settings.app_version, settings.env
     )
+    _seed_first_admin()
     yield
     logger.info("%s shutting down", settings.app_name)
+
+
+def _seed_first_admin() -> None:
+    """Create the bootstrap admin on startup if configured (best-effort)."""
+    from app.db.session import SessionLocal
+    from app.services.user_service import seed_first_admin
+
+    try:
+        with SessionLocal() as db:
+            seed_first_admin(db)
+    except Exception:  # noqa: BLE001 - never block startup on seeding
+        logger.exception("First-admin seeding failed (continuing startup)")
 
 
 def create_app() -> FastAPI:

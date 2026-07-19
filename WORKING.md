@@ -47,8 +47,9 @@ reliability, observability.
 ## 3. Milestone roadmap (Backend = 8 milestones)
 
 - [x] **Milestone 1 — Project Setup** ✅ DONE (see below + CHANGELOG)
-- [x] **Milestone 2 — Database Design** ✅ DONE (schema + models + migration; live `alembic upgrade` pending Docker run)
-- [ ] Milestone 3–8 — *(awaiting details)*
+- [x] **Milestone 2 — Database Design** ✅ DONE (schema + models + migration; verified live)
+- [x] **Milestone 3 — Authentication & RBAC** ✅ DONE (JWT access+refresh, roles, logout; verified live)
+- [ ] Milestone 4–8 — *(awaiting details)*
 
 > The user provides milestone requirements one at a time. Do **not** build ahead of
 > the current milestone. Ask for the next milestone's details when the current is done.
@@ -116,7 +117,9 @@ d:\Multiagent\
 - `GET /` → service metadata + docs link
 - `GET /api/v1/health` → `{status:"ok", app, version, env}` (liveness, no DB)
 - `GET /api/v1/health/db` → `{status:"ok", database:"reachable"}` (runs `SELECT 1`)
-- `GET /docs` → Swagger UI · `GET /redoc` · `GET /openapi.json`
+- **Auth (M3):** `POST /api/v1/auth/login` · `POST /auth/refresh` · `POST /auth/logout` · `GET /auth/me`
+- **Users (M3, admin-only):** `GET /api/v1/users` · `POST /api/v1/users`
+- `GET /docs` → Swagger UI (use "Authorize" with a token) · `GET /redoc` · `GET /openapi.json`
 
 ### Conventions established (follow these in future milestones)
 - **Config:** read env ONLY via `app/core/config.py` (`from app.core.config import settings`). Never `os.environ` elsewhere.
@@ -144,6 +147,19 @@ d:\Multiagent\
 - **Versioning** = `version` int on agents/tools/reports + `report_versions` snapshots; agent/tool config history captured in `audit_logs`.
 - **Audit logging** = the `audit_logs` table, never updated/deleted.
 - Migrations run automatically on backend container start (`alembic upgrade head` in the compose command).
+
+### Authentication & RBAC (Milestone 3)
+- **JWT**: access token (30 min, stateless, carries `sub`+`role`) + refresh token (7 days, `jti` tracked in `refresh_tokens`).
+- **Password hashing**: bcrypt (`app/core/security.py`); tokens via PyJWT.
+- **Refresh rotation**: `/auth/refresh` revokes the presented token and issues a new pair. **Logout** revokes the refresh token's `jti`. Access tokens are not revocable — they just expire.
+- **Roles**: `analyst` / `admin` / `leadership`. RBAC via `require_roles(...)` / `require_admin` in `app/api/deps.py`.
+- **First admin**: seeded on startup from `FIRST_ADMIN_EMAIL`/`FIRST_ADMIN_PASSWORD` (dev default `admin@example.com` / `ChangeMe123!`). User creation is **admin-only** (`POST /users`).
+- **Key files**: `core/security.py`, `api/deps.py`, `services/auth_service.py`, `services/user_service.py`, `api/v1/routes/{auth,users}.py`, `models/refresh_token.py`.
+- ⚠️ **Change `JWT_SECRET_KEY` and the admin password in any real environment.**
+
+**Auth conventions (reuse in later milestones):**
+- Protect an endpoint: `user = Depends(get_current_user)`.
+- Restrict by role: `Depends(require_admin)` or `Depends(require_roles(UserRole.ADMIN, UserRole.LEADERSHIP))`.
 
 ---
 
@@ -187,13 +203,13 @@ alembic upgrade head --sql                    # render SQL without a DB (offline
 
 | Check | Result |
 |-------|--------|
-| `pytest` (in backend/.venv) | ✅ 7 passed (3 health + 4 model) |
-| `alembic upgrade head --sql` (offline render) | ✅ valid — all 8 tables/enums/indexes |
-| `alembic downgrade --sql` (offline render) | ✅ valid — fully reversible |
-| `docker compose config` (syntax) | ✅ valid |
-| Full `docker compose up --build` (live) | ✅ **DONE 2026-07-19** — built, both containers healthy |
-| Live `alembic upgrade head` on start | ✅ ran `0001_initial`; all 8 tables created (verified via `psql \dt`) |
-| Live `/api/v1/health` and `/api/v1/health/db` | ✅ both returned `200` (DB reachable) |
+| `pytest` (in backend/.venv) | ✅ 11 passed (3 health + 4 model + 4 security) |
+| `alembic` migrations 0001+0002 (offline render) | ✅ valid & reversible |
+| Full `docker compose up --build` (live) | ✅ built, both containers healthy |
+| Live migrations `0001`→`0002` on start | ✅ all 9 tables created (incl. `refresh_tokens`) |
+| Live admin seed on start | ✅ `admin@example.com` created (admin role) |
+| Live auth flow (httpx e2e, 15 checks) | ✅ **ALL PASSED** — login, /me, RBAC 403, refresh rotation, logout revocation |
+| Live `/api/v1/health/db` | ✅ `200` (DB reachable) |
 | Git commit + push to GitHub | ✅ M1 done; ⏳ M2 not yet committed/pushed |
 
 **DBeaver / psql access:** connect to `localhost:5432`, db `research`, user/pass `postgres`/`postgres`.
