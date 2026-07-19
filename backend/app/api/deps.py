@@ -62,5 +62,7 @@ def require_roles(*roles: UserRole):
     return _checker
 
 
-# Convenience dependency for admin-only endpoints.
+# Convenience dependencies.
 require_admin = require_roles(UserRole.ADMIN)
+# Reports may be written by analysts and admins (leadership is read-only).
+require_report_writer = require_roles(UserRole.ADMIN, UserRole.ANALYST)

@@ -49,7 +49,8 @@ reliability, observability.
 - [x] **Milestone 1 — Project Setup** ✅ DONE (see below + CHANGELOG)
 - [x] **Milestone 2 — Database Design** ✅ DONE (schema + models + migration; verified live)
 - [x] **Milestone 3 — Authentication & RBAC** ✅ DONE (JWT access+refresh, roles, logout; verified live)
-- [ ] Milestone 4–8 — *(awaiting details)*
+- [x] **Milestone 4 — CRUD APIs** ✅ DONE (users/agents/tools/reports CRUD, pagination, filtering, versioning; verified live)
+- [ ] Milestone 5–8 — *(awaiting details)*
 
 > The user provides milestone requirements one at a time. Do **not** build ahead of
 > the current milestone. Ask for the next milestone's details when the current is done.
@@ -118,7 +119,7 @@ d:\Multiagent\
 - `GET /api/v1/health` → `{status:"ok", app, version, env}` (liveness, no DB)
 - `GET /api/v1/health/db` → `{status:"ok", database:"reachable"}` (runs `SELECT 1`)
 - **Auth (M3):** `POST /api/v1/auth/login` · `POST /auth/refresh` · `POST /auth/logout` · `GET /auth/me`
-- **Users (M3, admin-only):** `GET /api/v1/users` · `POST /api/v1/users`
+- **CRUD (M4):** `/api/v1/{users,agents,tools,reports}` — `GET` (list, paginated+filtered), `GET /{id}`, `POST`, `PATCH /{id}`, `DELETE /{id}` (soft). Plus `GET /reports/{id}/versions`.
 - `GET /docs` → Swagger UI (use "Authorize" with a token) · `GET /redoc` · `GET /openapi.json`
 
 ### Conventions established (follow these in future milestones)
@@ -160,6 +161,15 @@ d:\Multiagent\
 **Auth conventions (reuse in later milestones):**
 - Protect an endpoint: `user = Depends(get_current_user)`.
 - Restrict by role: `Depends(require_admin)` or `Depends(require_roles(UserRole.ADMIN, UserRole.LEADERSHIP))`.
+
+### CRUD APIs (Milestone 4)
+- Full REST CRUD for **users, agents, tools, reports** under `/api/v1/...`. `DELETE` is **soft** (sets `deleted_at`).
+- **Pagination**: `?page=&size=` → `Page[T]` envelope `{items,total,page,size,pages}` (`schemas/common.py`); `services/crud.paginate` does the count+limit/offset.
+- **Filtering**: users `role/is_active/q`; agents `is_active/q`; tools `category/enabled/q`; reports `status/job_id/q`. Default sort newest-first.
+- **RBAC**: users = admin-only (router-level `dependencies=[Depends(require_admin)]`); agents/tools reads = any auth, writes = admin; reports reads = any auth, writes = analyst+admin (`require_report_writer`), leadership read-only.
+- **Errors**: `get_active_or_404` (`app/api/utils.py`) → 404; duplicate email/key/job → 409; Pydantic → 422.
+- **Report versioning**: create writes a v1 snapshot; each `PATCH` bumps `reports.version` and writes a matching `report_versions` row. `GET /reports/{id}/versions` lists history.
+- **Conventions**: entity service in `services/<entity>_service.py` (returns `(items,total)` for lists); Pydantic Create/Update/Read in `schemas/<entity>.py`; thin routers in `api/v1/routes/<entity>.py`.
 
 ---
 
@@ -209,6 +219,7 @@ alembic upgrade head --sql                    # render SQL without a DB (offline
 | Live migrations `0001`→`0002` on start | ✅ all 9 tables created (incl. `refresh_tokens`) |
 | Live admin seed on start | ✅ `admin@example.com` created (admin role) |
 | Live auth flow (httpx e2e, 15 checks) | ✅ **ALL PASSED** — login, /me, RBAC 403, refresh rotation, logout revocation |
+| Live CRUD flow (httpx e2e, 25 checks) | ✅ **ALL PASSED** — pagination, filtering, RBAC per role, soft-delete, 404/422, report version snapshots |
 | Live `/api/v1/health/db` | ✅ `200` (DB reachable) |
 | Git commit + push to GitHub | ✅ M1 done; ⏳ M2 not yet committed/pushed |
 

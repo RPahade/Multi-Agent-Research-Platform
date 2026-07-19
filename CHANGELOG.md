@@ -57,6 +57,41 @@ Tools, Reports, Jobs), with migrations, and support for audit logging + versioni
 
 ---
 
+## [Milestone 4 — CRUD APIs] — 2026-07-19
+
+**Goal:** REST CRUD for core entities with pagination, filtering, validation, graceful errors.
+
+### Decisions
+- **RBAC (role-appropriate):** users admin-only; agents/tools reads any-auth, writes admin;
+  reports reads any-auth, writes analyst+admin (leadership read-only).
+- **Report updates snapshot** the new state into report_versions and bump `version`.
+- Pagination = `page/size` envelope; DELETE = soft-delete; audit-log writes deferred to observability milestone.
+
+### Added
+- `schemas/common.py` — `PageParams` (query dep) + generic `Page[T]` envelope.
+- `services/crud.py` — `paginate(stmt)` (count + limit/offset).
+- `app/api/utils.py` — `get_active_or_404` (soft-delete aware).
+- Schemas: `agent.py`, `tool.py`, `report.py` (Create/Update/Read + `ReportVersionRead`); `user.py` gains `UserUpdate`.
+- Services: `agent_service`, `tool_service`, `report_service` (CRUD + filters; report version snapshots);
+  `user_service` gains `list_users_page`, `update_user`, `soft_delete_user`.
+- Routes: full CRUD for `users` (admin-only, extended from M3), `agents`, `tools`, `reports`
+  (+ `GET /reports/{id}/versions`). New dep `require_report_writer` (admin+analyst).
+- 204 delete handlers return an explicit empty `Response` (FastAPI disallows a body on 204).
+
+### Verified (live — real Postgres, 2026-07-19)
+- `pytest` → **11 passed** (no schema change; code hot-reloaded via mounted volume).
+- End-to-end httpx CRUD flow (**25 checks, all passed**): paginated envelope + size honored,
+  role/category/status filters, admin-only users (analyst 403), agent write 403 for analyst,
+  version bump on agent/report update, duplicate tool key 409, leadership report-create 403,
+  report version history (v1 preserved, v2 current), soft-delete then 404, missing field 422.
+- Test data cleaned up afterward (only seeded admin remains).
+
+### Notes for next session
+- No new migration in M4 (used existing M2 schema). New entity code follows the
+  service/schema/route split — reuse `Page[T]`, `paginate`, `get_active_or_404` for new entities.
+
+---
+
 ## [Milestone 3 — Authentication & RBAC] — 2026-07-19
 
 **Goal:** Secure JWT authentication (access + refresh) with role-based access control.

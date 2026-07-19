@@ -4,14 +4,16 @@ from __future__ import annotations
 
 import logging
 import uuid
+from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.security import hash_password
 from app.models.enums import UserRole
 from app.models.user import User
+from app.services import crud
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +31,45 @@ def get_by_id(db: Session, user_id: uuid.UUID | str) -> User | None:
 
 def list_users(db: Session) -> list[User]:
     return list(db.scalars(select(User).where(User.deleted_at.is_(None)).order_by(User.created_at)))
+
+
+def list_users_page(
+    db: Session,
+    *,
+    page: int,
+    size: int,
+    role: UserRole | None = None,
+    is_active: bool | None = None,
+    q: str | None = None,
+) -> tuple[list[User], int]:
+    stmt = select(User).where(User.deleted_at.is_(None))
+    if role is not None:
+        stmt = stmt.where(User.role == role)
+    if is_active is not None:
+        stmt = stmt.where(User.is_active == is_active)
+    if q:
+        like = f"%{q}%"
+        stmt = stmt.where(or_(User.email.ilike(like), User.full_name.ilike(like)))
+    stmt = stmt.order_by(User.created_at.desc())
+    return crud.paginate(db, stmt, page, size)
+
+
+def update_user(db: Session, user: User, data: dict) -> User:
+    """Apply a partial update; ``password`` (if present) is re-hashed."""
+    if "password" in data:
+        password = data.pop("password")
+        if password:
+            user.hashed_password = hash_password(password)
+    for field, value in data.items():
+        setattr(user, field, value)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def soft_delete_user(db: Session, user: User) -> None:
+    user.deleted_at = datetime.now(timezone.utc)
+    db.commit()
 
 
 def create_user(

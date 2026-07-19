@@ -20,6 +20,15 @@ class UserCreate(BaseModel):
     role: UserRole = UserRole.ANALYST
 
 
+class UserUpdate(BaseModel):
+    """Partial update for a user (admin-only). Only provided fields change."""
+
+    full_name: str | None = Field(default=None, max_length=255)
+    role: UserRole | None = None
+    is_active: bool | None = None
+    password: str | None = Field(default=None, min_length=8, max_length=72)
+
+
 class UserRead(BaseModel):
     """Public representation of a user."""
 
