@@ -30,6 +30,62 @@ services:
     ports:
       - "${MCP_PORT:-8090}:8090"
 
+  # Kafka broker in KRaft mode (no ZooKeeper). Internal clients use kafka:9092;
+  # host tools can use localhost:29092.
+  kafka:
+    image: apache/kafka:3.9.0
+    container_name: mari-kafka
+    restart: unless-stopped
+    ports:
+      - "29092:29092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: CONTROLLER://:9093,PLAINTEXT://:9092,EXTERNAL://:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    volumes:
+      - kafkadata:/var/lib/kafka/data
+
+  # Web UI to browse topics/messages (http://localhost:8085).
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: mari-kafka-ui
+    restart: unless-stopped
+    depends_on:
+      - kafka
+    ports:
+      - "${KAFKA_UI_PORT:-8085}:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      DYNAMIC_CONFIG_ENABLED: "true"
+
+  # Consumer that subscribes to agent.job.events and logs each message.
+  consumer:
+    build: ./backend
+    container_name: mari-consumer
+    restart: unless-stopped
+    depends_on:
+      - kafka
+    environment:
+      KAFKA_ENABLED: "true"
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
+      KAFKA_TOPIC: ${KAFKA_TOPIC:-agent.job.events}
+      KAFKA_CONSUMER_GROUP: ${KAFKA_CONSUMER_GROUP:-job-event-logger}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    volumes:
+      - ./backend/app:/app/app
+    command: ["python", "-m", "app.kafka.consumer"]
+
   backend:
     build: ./backend
     container_name: mari-backend
@@ -38,6 +94,8 @@ services:
       db:
         condition: service_healthy
       mcp:
+        condition: service_started
+      kafka:
         condition: service_started
     environment:
       APP_NAME: ${APP_NAME:-Multi-Agent Research Intelligence Platform}
@@ -68,6 +126,10 @@ services:
       RETRIEVAL_TOP_K: ${RETRIEVAL_TOP_K:-5}
       MCP_ENABLED: ${MCP_ENABLED:-true}
       MCP_SERVER_URL: ${MCP_SERVER_URL:-http://mcp:8090/mcp}
+      KAFKA_ENABLED: ${KAFKA_ENABLED:-true}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
+      KAFKA_TOPIC: ${KAFKA_TOPIC:-agent.job.events}
+      KAFKA_CONSUMER_GROUP: ${KAFKA_CONSUMER_GROUP:-job-event-logger}
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     volumes:
@@ -76,8 +138,11 @@ services:
       - ./backend/alembic:/app/alembic
       # Uploaded source documents (browsable on the host)
       - ./data/uploads:/app/data/uploads
+      # Sample files (e.g. job_events.jsonl for the Kafka file-replay producer)
+      - ./samples:/app/samples
     # Apply DB migrations, then start the API (auto-reload in dev).
     command: ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"]
 
 volumes:
   pgdata:
+  kafkadata:

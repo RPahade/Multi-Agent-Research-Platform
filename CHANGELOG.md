@@ -57,6 +57,46 @@ Tools, Reports, Jobs), with migrations, and support for audit logging + versioni
 
 ---
 
+## [Milestone 7 — Kafka Integration] — 2026-07-26
+
+**Goal:** local Kafka + event-driven communication (producer from a file, consumer that logs,
+event schema with job id/status/timestamp).
+
+### Decisions
+- KRaft single broker (no ZooKeeper) + Kafka UI; `confluent-kafka` client;
+  file-replay producer AND real backend job events + a consumer service (full integration).
+
+### Added
+- **Compose**: `kafka` (`apache/kafka:3.9.0`, KRaft), `kafka-ui` (http://localhost:8085),
+  `consumer` (reuses backend image, runs `app.kafka.consumer`). Backend env + `samples/` mount +
+  `kafkadata` volume. Broker advertises `kafka:9092` (internal) / `localhost:29092` (host).
+- **Event schema** `app/schemas/events.py` — `JobEvent {event_id, event_type, job_id, status,
+  progress, current_step, timestamp}`; topic `agent.job.events`, keyed by job_id.
+- **Real producer** `app/services/event_publisher.py` — best-effort (KAFKA_ENABLED toggle, lazy
+  import, never breaks a job). Wired into the job lifecycle: created / running / progress /
+  succeeded / retry / failed / cancelled. Flushed on app shutdown.
+- **File-replay producer** `app/kafka/file_producer.py` (reads JSONL, validates, publishes) +
+  `samples/job_events.jsonl`.
+- **Consumer** `app/kafka/consumer.py` — subscribes and logs each message (partition/offset).
+- `GET /api/v1/events/status`; config `KAFKA_ENABLED/BOOTSTRAP_SERVERS/TOPIC/CONSUMER_GROUP`;
+  dep `confluent-kafka==2.6.1`.
+
+### Verified (live)
+- httpx + docker e2e **all passed**: a research job produced the full ordered event stream
+  (created → running → progress×5 for each tool step → succeeded), consumed and logged by the
+  consumer with partition/offset; the file-replay producer published 8 events and the consumer
+  logged them (including a `job.failed`). `events/status` reflects config.
+
+### Gotchas
+- `KAFKA_LISTENERS` must use empty-host binds (`PLAINTEXT://:9092`), not `0.0.0.0` — Kafka
+  rejects `0.0.0.0` as a nonroutable advertised address (broker crash-looped until fixed).
+- Consumer may log a transient `UNKNOWN_TOPIC_OR_PART` at startup before the topic auto-creates
+  on first publish — benign, self-resolves.
+
+**Next:** Milestone 8.
+
+---
+
 ## [Milestone 6 — Agent Orchestration] — 2026-07-19/20 (step-by-step)
 
 ### Step 4 of 4 — MCP tools ✅ (Milestone 6 COMPLETE)

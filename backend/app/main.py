@@ -38,6 +38,10 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
     job_runner.stop_reaper()
     job_runner.shutdown()
+
+    from app.services import event_publisher
+
+    event_publisher.flush()
     logger.info("%s shutting down", settings.app_name)
 
 

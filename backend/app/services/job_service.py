@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.models.enums import JobStatus, JobType
 from app.models.job import Job
 from app.models.job_step import JobStep
-from app.services import crud
+from app.services import crud, event_publisher
 
 # Statuses from which a job can still be cancelled.
 _CANCELLABLE = (JobStatus.PENDING, JobStatus.RUNNING)
@@ -33,7 +33,13 @@ def set_progress(db: Session, job_id: uuid.UUID, progress: int, current_step: st
         .values(progress=progress, current_step=current_step, last_heartbeat=datetime.now(timezone.utc))
     )
     db.commit()
-    return result.rowcount > 0
+    updated = result.rowcount > 0
+    if updated:
+        event_publisher.publish_status(
+            job_id, JobStatus.RUNNING, event_type="job.progress",
+            progress=progress, current_step=current_step,
+        )
+    return updated
 
 
 def list_steps(db: Session, job_id: uuid.UUID) -> list[JobStep]:
@@ -64,6 +70,7 @@ def create_job(
     db.add(job)
     db.commit()
     db.refresh(job)
+    event_publisher.publish_status(job.id, JobStatus.PENDING, event_type="job.created")
     return job
 
 
@@ -105,4 +112,7 @@ def request_cancel(db: Session, job_id: uuid.UUID) -> bool:
         .values(status=JobStatus.CANCELLED, finished_at=datetime.now(timezone.utc))
     )
     db.commit()
-    return result.rowcount > 0
+    cancelled = result.rowcount > 0
+    if cancelled:
+        event_publisher.publish_status(job_id, JobStatus.CANCELLED, event_type="job.cancelled")
+    return cancelled

@@ -26,6 +26,9 @@ pgvector==0.3.6
 # --- MCP client (Milestone 6, step 4) ---
 mcp>=1.9,<2
 
+# --- Kafka (Milestone 7) ---
+confluent-kafka==2.6.1
+
 # --- Dev / test ---
 pytest==8.3.4
 httpx==0.28.1

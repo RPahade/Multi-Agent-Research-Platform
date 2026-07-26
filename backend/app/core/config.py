@@ -82,6 +82,12 @@ class Settings(BaseSettings):
     mcp_server_url: str = "http://mcp:8090/mcp"
     mcp_timeout_seconds: float = 30.0
 
+    # --- Kafka (Milestone 7) ---
+    kafka_enabled: bool = False
+    kafka_bootstrap_servers: str = "kafka:9092"
+    kafka_topic: str = "agent.job.events"
+    kafka_consumer_group: str = "job-event-logger"
+
     @property
     def cors_origins_list(self) -> list[str]:
         """Parse the comma-separated CORS origins into a clean list."""

@@ -25,6 +25,7 @@ from app.core.config import settings
 from app.db.session import SessionLocal
 from app.models.enums import JobStatus, JobType
 from app.models.job import Job
+from app.services import event_publisher
 
 logger = logging.getLogger(__name__)
 
@@ -150,6 +151,7 @@ def _fail_or_retry(db, job_id, attempt_no: int, max_attempts: int, error: str) -
         db.commit()
         if result.rowcount > 0:
             logger.info("Job %s failed attempt %s/%s; retrying", job_id, attempt_no, max_attempts)
+            event_publisher.publish_status(job_id, JobStatus.PENDING, event_type="job.retry", current_step=error[:200])
             submit(job_id)
     else:
         db.execute(
@@ -159,6 +161,7 @@ def _fail_or_retry(db, job_id, attempt_no: int, max_attempts: int, error: str) -
         )
         db.commit()
         logger.info("Job %s failed permanently after %s attempts", job_id, attempt_no)
+        event_publisher.publish_status(job_id, JobStatus.FAILED, event_type="job.failed", current_step=error[:200])
 
 
 def _run(job_id) -> None:
@@ -202,6 +205,7 @@ def _execute(db, job_id) -> None:
     if started.rowcount == 0:
         logger.info("Job %s not started (already cancelled or not pending)", job_id)
         return
+    event_publisher.publish_status(job_id, JobStatus.RUNNING, event_type="job.running", progress=0)
 
     attempt_no = db.execute(select(Job.attempts).where(Job.id == job_id)).scalar()
     max_attempts = db.execute(select(Job.max_attempts).where(Job.id == job_id)).scalar()
@@ -225,6 +229,7 @@ def _execute(db, job_id) -> None:
             )
             db.commit()
             logger.info("Job %s orchestration succeeded", job_id)
+            event_publisher.publish_status(job_id, JobStatus.SUCCEEDED, event_type="job.succeeded", progress=100)
         else:
             _fail_or_retry(db, job_id, attempt_no, max_attempts, outcome.error or "Orchestration failed")
         return
@@ -247,6 +252,10 @@ def _execute(db, job_id) -> None:
             )
             db.commit()
             logger.info("Job %s ingestion succeeded (%s chunks)", job_id, outcome.chunks)
+            event_publisher.publish_status(
+                job_id, JobStatus.SUCCEEDED, event_type="job.succeeded", progress=100,
+                current_step=f"ingested {outcome.chunks} chunks",
+            )
         else:
             _fail_or_retry(db, job_id, attempt_no, max_attempts, outcome.error or "Ingestion failed")
         return
@@ -275,6 +284,9 @@ def _execute(db, job_id) -> None:
         if updated.rowcount == 0:
             logger.info("Job %s cancelled mid-run", job_id)
             return
+        event_publisher.publish_status(
+            job_id, JobStatus.RUNNING, event_type="job.progress", progress=progress, current_step=label
+        )
 
     db.execute(
         update(Job)
@@ -284,3 +296,4 @@ def _execute(db, job_id) -> None:
     )
     db.commit()
     logger.info("Job %s succeeded on attempt %s", job_id, attempt_no)
+    event_publisher.publish_status(job_id, JobStatus.SUCCEEDED, event_type="job.succeeded", progress=100)

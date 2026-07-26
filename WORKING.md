@@ -59,7 +59,10 @@ reliability, observability.
   - [x] step 2: LLM synthesis (OpenAI + Gemini adapters, grounded+cited, stub fallback) ✅ verified live with **Gemini** (`gemini-flash-latest`)
   - [x] step 3: RAG ✅ upload → parse → chunk → embed (Gemini) → pgvector cosine retrieval → cited report
   - [ ] step 4: MCP-based tools (same Tool interface)
-- [ ] Milestone 7–8 — *(awaiting details)*
+- [x] **Milestone 7 — Kafka Integration** ✅ DONE — KRaft broker + Kafka UI in compose; backend
+  publishes real job lifecycle events to `agent.job.events`; file-replay producer + consumer
+  service; verified live (real events + file replay both consumed).
+- [ ] Milestone 8 — *(awaiting details)*
 
 > The user provides milestone requirements one at a time. Do **not** build ahead of
 > the current milestone. Ask for the next milestone's details when the current is done.
@@ -133,6 +136,7 @@ d:\Multiagent\
 - **CRUD (M4):** `/api/v1/{users,agents,tools,reports}` — `GET` (list, paginated+filtered), `GET /{id}`, `POST`, `PATCH /{id}`, `DELETE /{id}` (soft). Plus `GET /reports/{id}/versions`.
 - **Jobs (M5):** `POST /api/v1/jobs` (async; optional `Idempotency-Key` header dedups), `GET /jobs` (list/filter), `GET /jobs/{id}` (status+progress+attempts), `POST /jobs/{id}/cancel`, `GET /jobs/{id}/stream` (**SSE** live status).
 - **Jobs orchestration (M6):** `GET /jobs/{id}/steps` — per-tool orchestration trace (status/output/error per tool).
+- **MCP (M6):** `GET /api/v1/mcp/status`. **Kafka (M7):** `GET /api/v1/events/status`.
 - `GET /docs` → Swagger UI (use "Authorize" with a token) · `GET /redoc` · `GET /openapi.json`
 
 ### Conventions established (follow these in future milestones)
@@ -237,6 +241,20 @@ d:\Multiagent\
 
 > **Gotcha**: `DocumentChunk` has a column named `text`, which shadows SQLAlchemy's `text()` inside the class body — `document.py` imports it as `sa_text`.
 - **Key files**: `app/agent/base.py`, `app/agent/tools/*`, `app/agent/orchestrator.py`, `models/job_step.py`, `services/job_runner.py` (research branch).
+
+> **Note:** M6 also has step 2 (LLM synthesis: `app/agent/llm/*`, provider OpenAI/Gemini, `synthesis` tool) and step 4 (MCP tools: separate `mcp_server/` container + `app/agent/mcp/*`, `GET /mcp/status`). See CHANGELOG for details.
+
+### Kafka event pipeline (Milestone 7) ✅
+- **Docker services now**: `db` (pgvector), `backend`, `mcp`, **`kafka`**, **`kafka-ui`**, **`consumer`**.
+- **Broker**: `apache/kafka:3.9.0` in **KRaft mode** (no ZooKeeper). Internal clients use `kafka:9092`; host tools use `localhost:29092`. **Kafka UI** at http://localhost:8085.
+  - *Compose gotcha*: use empty-host binds (`PLAINTEXT://:9092`) in `KAFKA_LISTENERS`, not `0.0.0.0` — Kafka rejects `0.0.0.0` as a nonroutable advertised address.
+- **Event schema** `app/schemas/events.py` — `JobEvent {event_id, event_type, job_id, status, progress, current_step, timestamp}` on topic `agent.job.events`, keyed by `job_id` for ordering.
+- **Real producer** `app/services/event_publisher.py` — best-effort (`KAFKA_ENABLED` toggle; lazy `confluent_kafka` import; never breaks a job if Kafka is down). Wired into the lifecycle: `job.created` (create_job), `job.running`/`job.succeeded`/`job.retry`/`job.failed` (job_runner), `job.progress` (set_progress → orchestrator + ingestion steps), `job.cancelled` (request_cancel). Flushed on shutdown.
+- **File-replay producer** `app/kafka/file_producer.py` — reads a JSONL file, validates each line against `JobEvent`, publishes. Run: `docker compose exec backend python -m app.kafka.file_producer samples/job_events.jsonl`.
+- **Consumer** `app/kafka/consumer.py` — its own container (reuses backend image) subscribing to the topic and logging each message with partition/offset. Watch: `docker compose logs -f consumer`.
+- **Config/env**: `KAFKA_ENABLED`, `KAFKA_BOOTSTRAP_SERVERS`, `KAFKA_TOPIC`, `KAFKA_CONSUMER_GROUP`. `GET /api/v1/events/status`. Sample events: `samples/job_events.jsonl`.
+- **Real event-driven architecture**: any consumer (a logger now; a live-UI feed or analytics later) reacts to `agent.job.events` without the producer changing.
+- **Key files**: `services/event_publisher.py`, `kafka/{file_producer,consumer}.py`, `schemas/events.py`, `api/v1/routes/events.py`.
 
 ---
 
