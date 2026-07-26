@@ -54,7 +54,12 @@ reliability, observability.
   - [x] step 1/3: job creation, progress tracking, cancellation
   - [x] step 2/3: idempotency + resilience (retries, startup recovery, reaper)
   - [x] step 3/3: live status updates via SSE
-- [ ] Milestone 6–8 — *(awaiting details)*
+- [~] **Milestone 6 — Agent Orchestration** 🚧 IN PROGRESS (step-by-step, plain Python first):
+  - [x] step 1: sequential tool pipeline (own Python tools) + partial-failure handling ✅
+  - [x] step 2: LLM synthesis (OpenAI + Gemini adapters, grounded+cited, stub fallback) ✅ verified live with **Gemini** (`gemini-flash-latest`)
+  - [x] step 3: RAG ✅ upload → parse → chunk → embed (Gemini) → pgvector cosine retrieval → cited report
+  - [ ] step 4: MCP-based tools (same Tool interface)
+- [ ] Milestone 7–8 — *(awaiting details)*
 
 > The user provides milestone requirements one at a time. Do **not** build ahead of
 > the current milestone. Ask for the next milestone's details when the current is done.
@@ -63,6 +68,8 @@ reliability, observability.
 1. **Design first** — propose the design, confirm key decisions with the user, get sign-off.
 2. **Then implement** — build against the agreed design.
 3. **Then document** — update WORKING.md + CHANGELOG.md at the end of the milestone.
+4. **Commit once the milestone is complete** — not after each step (user preference).
+   Large milestones are built step-by-step, but all steps land in one commit at the end.
 
 ---
 
@@ -125,6 +132,7 @@ d:\Multiagent\
 - **Auth (M3):** `POST /api/v1/auth/login` · `POST /auth/refresh` · `POST /auth/logout` · `GET /auth/me`
 - **CRUD (M4):** `/api/v1/{users,agents,tools,reports}` — `GET` (list, paginated+filtered), `GET /{id}`, `POST`, `PATCH /{id}`, `DELETE /{id}` (soft). Plus `GET /reports/{id}/versions`.
 - **Jobs (M5):** `POST /api/v1/jobs` (async; optional `Idempotency-Key` header dedups), `GET /jobs` (list/filter), `GET /jobs/{id}` (status+progress+attempts), `POST /jobs/{id}/cancel`, `GET /jobs/{id}/stream` (**SSE** live status).
+- **Jobs orchestration (M6):** `GET /jobs/{id}/steps` — per-tool orchestration trace (status/output/error per tool).
 - `GET /docs` → Swagger UI (use "Authorize" with a token) · `GET /redoc` · `GET /openapi.json`
 
 ### Conventions established (follow these in future milestones)
@@ -194,6 +202,42 @@ d:\Multiagent\
 
 > **Migrations don't auto-apply on hot-reload** (only on container start). After adding a migration, run `docker compose restart backend` (re-runs `alembic upgrade head`) or `docker compose exec backend alembic upgrade head`.
 
+### Agent orchestration (Milestone 6 — step 1 of 4 done)
+- **The agent = a sequential tool pipeline run inside a job.** For `type=research` jobs, `job_runner` calls `app/agent/orchestrator.py` instead of the simulated pipeline. Each tool becomes a step → updates `current_step`/`progress` (visible via SSE) and is recorded as a `job_steps` row.
+- **Tool contract** (`app/agent/base.py`): `Tool{key,name,required}` + `run(ctx) -> ToolResult`. `ToolContext` threads `input` + `artifacts` between tools. **This is the seam MCP plugs into later** — an `MCPTool` will implement the same interface with zero orchestrator changes.
+- **Pipeline** (`app/agent/tools/`): `ingestion → research → synthesis → citation → compliance` (`build_pipeline()`). Step 1 tools are deterministic stubs; **synthesis is LLM-powered (step 2)**. (`formatting.py` retained for the future export milestone, not in the pipeline.)
+
+#### LLM synthesis (step 2)
+- **Provider-agnostic** `LLMClient` in `app/agent/llm/` (`base.py` + `openai_client.py` + `gemini_client.py`, raw httpx — no SDK deps). `get_llm_client()` picks the provider from `LLM_PROVIDER` (`openai`/`gemini`/`none`).
+- **SynthesisTool** builds a grounded prompt (query + `input.sources=[{title,text}]` + research findings), asks the LLM for a JSON report (title/summary/sections/citations), normalizes it, and records `generated_by` (provider/model/usage).
+- **Retry + fallback**: transient errors (429/5xx/timeout) retry with backoff; if no provider/key or it keeps failing, it **falls back to a deterministic stub report** (`content.degraded=true`) so the job still succeeds.
+- **Config/env**: `LLM_PROVIDER`, `OPENAI_API_KEY`/`OPENAI_MODEL`, `GEMINI_API_KEY`/`GEMINI_MODEL`, `LLM_TEMPERATURE`, `LLM_MAX_TOKENS`. Keys live in `.env` (git-ignored); to switch providers/models, edit `.env` and run **`docker compose up -d`** (recreates the container — a plain `restart` does NOT re-read `.env`).
+- **Robust parsing**: `extract_json()` (`llm/base.py`) strips ``` fences and tolerates trailing text (LLMs emit extra data even in JSON mode).
+- **Model-name gotcha**: provider model names change and are key-specific. `gemini-1.5-flash` / `gemini-2.5-flash` returned 404 ("not available to new users") for the test key; **`gemini-flash-latest`** worked (now the default). List a key's models: `curl "https://generativelanguage.googleapis.com/v1beta/models?key=KEY"`. OpenAI's test key returned `429 quota exceeded` (needs billing) → the graceful fallback kicked in.
+- **Verified live (Gemini `gemini-flash-latest`)**: real grounded, cited report generated (not fallback), ~1.7k tokens.
+- **Key files**: `app/agent/llm/*`, `app/agent/tools/synthesis.py`.
+- **Partial-failure policy**: `required` tool fails → pipeline stops, job `failed` (steps recorded); `optional` tool fails (currently only `citation`) → recorded and pipeline continues, job `succeeds` with `warnings`.
+- **Output**: the pipeline writes a **Report** linked to the job (`report.job_id`); a retry updates it (bumping the report version).
+- **`job_steps` table** (migration `0004`): one row per tool — `sequence`, `tool_key`, `status`, `output` JSONB, `error`, timings. Read via `GET /jobs/{id}/steps`.
+- **Test hooks** in `job.input`: `fail_tool` (force a tool to fail), `tool_seconds` (per-tool delay), plus `query`/`documents`.
+- ⚠️ **Behavior change**: `type=research` now runs real orchestration. The old **simulated** pipeline (`steps`/`step_seconds`/`fail`/`fail_times`) now only runs for **non-research** job types (`export`/`ingestion`) — use those to exercise M5 simulated mechanics.
+- **Not done yet**: step 4 = MCP tools. (Langfuse tracing + LangGraph are separate/optional.)
+
+### RAG — documents & retrieval (Milestone 6, step 3) ✅
+- **Pipeline is now**: `retrieval → research → synthesis → citation → compliance`.
+- **Ingestion flow**: `POST /documents` (multipart) saves the file to the `./data/uploads` volume, creates a `documents` row, and starts an **ingestion job** (`JobType.INGESTION`) — so it inherits M5 progress/cancel/retry/SSE. The job parses (pypdf / python-docx / text), chunks (~1000 chars, 150 overlap, paragraph-aware), embeds in batches of 32, and stores `document_chunks`. Status: uploaded → processing → ingested/failed.
+- **Retrieval flow**: `RetrievalTool` embeds the query and runs **pgvector cosine search** (`embedding.cosine_distance`, HNSW index) over ingested chunks, optionally filtered by `input.document_ids`; results become the `sources` synthesis cites. Falls back to inline `input.sources` if no embeddings/matches.
+- **Embeddings**: `app/agent/llm/embeddings.py` — `EmbeddingClient` + Gemini/OpenAI adapters. Gemini `gemini-embedding-001` with `outputDimensionality=768`; **vectors are L2-normalized client-side** (truncated Gemini vectors are not unit-length, which would skew cosine).
+- **pgvector**: db image is `pgvector/pgvector:pg16`; migration 0005 runs `CREATE EXTENSION vector`, creates `documents` + `document_chunks(embedding vector(768))` + an HNSW cosine index. **Index limit is 2000 dims** — that's why we request 768 instead of the native 3072.
+- **Endpoints**: `POST /documents`, `GET /documents`, `GET /documents/{id}`, `GET /documents/{id}/chunks` (inspect what RAG searches), `DELETE /documents/{id}`. Upload/delete = analyst+admin; reads = any auth. 25 MB upload cap.
+- **Model failover**: `GEMINI_FALLBACK_MODELS` — Gemini often 503s a specific model ("high demand"); the client retries then transparently tries the next model. Verified live (primary 503 → `gemini-flash-lite-latest` served it).
+- **Tuning lesson**: `top_k` governs recall. With `top_k=5` the model correctly said a fact "isn't in the sources"; with `top_k=12` it retrieved the missing clause and answered fully. Default `RETRIEVAL_TOP_K=5`, overridable per job via `input.top_k`.
+- **Sample docs**: `samples/vendor_a_proposal.txt`, `samples/vendor_b_contract.txt` for manual testing.
+- **Key files**: `models/document.py`, `services/{document_service,ingestion_service,document_parser,chunking}.py`, `agent/tools/retrieval.py`, `agent/llm/embeddings.py`, `api/v1/routes/documents.py`.
+
+> **Gotcha**: `DocumentChunk` has a column named `text`, which shadows SQLAlchemy's `text()` inside the class body — `document.py` imports it as `sa_text`.
+- **Key files**: `app/agent/base.py`, `app/agent/tools/*`, `app/agent/orchestrator.py`, `models/job_step.py`, `services/job_runner.py` (research branch).
+
 ---
 
 ## 5. How to run
@@ -246,6 +290,7 @@ alembic upgrade head --sql                    # render SQL without a DB (offline
 | Live jobs flow — M5 step 1 (httpx e2e, 13 checks) | ✅ **ALL PASSED** — async create, progress→100, cancel (not resurrected), 409 on finished, failure path, RBAC 403, filter, 404 |
 | Live jobs resilience — M5 step 2 (httpx e2e, 15 checks) | ✅ **ALL PASSED** — idempotency dedup, retries converge (attempts=3) & exhaust (failed), reaper recovers stale job, **hard-crash (SIGKILL) startup recovery** |
 | **Full M1→M5 regression (httpx e2e, 49 checks)** | ✅ **49/49 PASSED** — health, auth+RBAC, CRUD, jobs, resilience, **SSE stream** |
+| Live agent orchestration — M6 step 1 (httpx e2e, 17 checks) | ✅ **ALL PASSED** — 5-tool pipeline in order, per-tool steps, report linked to job, optional-fail continues, required-fail stops (no report), cancel, M5 simulated still works |
 | Live `/api/v1/health/db` | ✅ `200` (DB reachable) |
 
 > Note: from M5 on, e2e test data is **kept** in the DB (not cleaned up) for further testing.
@@ -261,10 +306,6 @@ Tables live under `research → Schemas → public → Tables` (only while conta
 - **Remote:** `origin` → https://github.com/RPahade/Multi-Agent-Research-Platform (clean URL, no token stored)
 - **Branch:** `main`
 - **Commit author identity:** `RPahade <rohpahade2@gmail.com>`
-- **Auth note:** The machine's saved HTTPS credential belongs to a *different* GitHub
-  account (`rohan-itmtb`) that lacks write access. Pushing required a Personal Access
-  Token for `RPahade`. A new session pushing will hit the same 403 unless the user
-  provides a PAT again or fixes the stored credential in Windows Credential Manager.
 - Pushes/commits happen **only when the user asks**.
 
 ---
@@ -272,5 +313,4 @@ Tables live under `research → Schemas → public → Tables` (only while conta
 ## 8. Next steps
 
 1. **(User)** Run `docker compose up --build` with Docker Desktop on; confirm DB health.
-2. **(User)** Provide **Milestone 2** requirements.
-3. Keep this file + CHANGELOG.md updated at the end of each milestone.
+2. Keep this file + CHANGELOG.md updated at the end of each milestone.

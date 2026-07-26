@@ -10,10 +10,36 @@ from sqlalchemy.orm import Session
 
 from app.models.enums import JobStatus, JobType
 from app.models.job import Job
+from app.models.job_step import JobStep
 from app.services import crud
 
 # Statuses from which a job can still be cancelled.
 _CANCELLABLE = (JobStatus.PENDING, JobStatus.RUNNING)
+
+
+def is_running(db: Session, job_id: uuid.UUID) -> bool:
+    """Whether the job is currently in the running state (used for cancel checks)."""
+    return db.execute(select(Job.status).where(Job.id == job_id)).scalar() == JobStatus.RUNNING
+
+
+def set_progress(db: Session, job_id: uuid.UUID, progress: int, current_step: str) -> bool:
+    """Conditionally update progress/current_step/heartbeat only while running.
+
+    Returns False if the row was not updated (e.g. the job was cancelled).
+    """
+    result = db.execute(
+        update(Job)
+        .where(Job.id == job_id, Job.status == JobStatus.RUNNING)
+        .values(progress=progress, current_step=current_step, last_heartbeat=datetime.now(timezone.utc))
+    )
+    db.commit()
+    return result.rowcount > 0
+
+
+def list_steps(db: Session, job_id: uuid.UUID) -> list[JobStep]:
+    return list(
+        db.scalars(select(JobStep).where(JobStep.job_id == job_id).order_by(JobStep.sequence))
+    )
 
 
 def create_job(

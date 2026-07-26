@@ -23,7 +23,7 @@ from sqlalchemy import select, update
 
 from app.core.config import settings
 from app.db.session import SessionLocal
-from app.models.enums import JobStatus
+from app.models.enums import JobStatus, JobType
 from app.models.job import Job
 
 logger = logging.getLogger(__name__)
@@ -206,8 +206,52 @@ def _execute(db, job_id) -> None:
     attempt_no = db.execute(select(Job.attempts).where(Job.id == job_id)).scalar()
     max_attempts = db.execute(select(Job.max_attempts).where(Job.id == job_id)).scalar()
     should_fail = fail and attempt_no <= fail_times
-    logger.info("Job %s attempt %s/%s started (%d steps)", job_id, attempt_no, max_attempts, total)
+    logger.info("Job %s attempt %s/%s started", job_id, attempt_no, max_attempts)
 
+    # Milestone 6: research jobs run the real agent orchestration pipeline.
+    if job.type == JobType.RESEARCH:
+        from app.agent import orchestrator
+
+        outcome = orchestrator.run(db, job)
+        if outcome.cancelled:
+            logger.info("Job %s cancelled during orchestration", job_id)
+            return
+        if outcome.success:
+            db.execute(
+                update(Job)
+                .where(Job.id == job_id, Job.status == JobStatus.RUNNING)
+                .values(status=JobStatus.SUCCEEDED, progress=100, current_step="completed",
+                        finished_at=_now(), last_heartbeat=_now())
+            )
+            db.commit()
+            logger.info("Job %s orchestration succeeded", job_id)
+        else:
+            _fail_or_retry(db, job_id, attempt_no, max_attempts, outcome.error or "Orchestration failed")
+        return
+
+    # Milestone 6 step 3: ingestion jobs parse + chunk + embed an uploaded document.
+    if job.type == JobType.INGESTION:
+        from app.services import ingestion_service
+
+        outcome = ingestion_service.run_ingestion(db, job)
+        if outcome.cancelled:
+            logger.info("Job %s cancelled during ingestion", job_id)
+            return
+        if outcome.success:
+            db.execute(
+                update(Job)
+                .where(Job.id == job_id, Job.status == JobStatus.RUNNING)
+                .values(status=JobStatus.SUCCEEDED, progress=100,
+                        current_step=f"ingested {outcome.chunks} chunks",
+                        finished_at=_now(), last_heartbeat=_now())
+            )
+            db.commit()
+            logger.info("Job %s ingestion succeeded (%s chunks)", job_id, outcome.chunks)
+        else:
+            _fail_or_retry(db, job_id, attempt_no, max_attempts, outcome.error or "Ingestion failed")
+        return
+
+    # Other job types: the simulated pipeline (used for testing progress/cancel/retries).
     for i, label in enumerate(labels, start=1):
         status = db.execute(select(Job.status).where(Job.id == job_id)).scalar()
         if status != JobStatus.RUNNING:

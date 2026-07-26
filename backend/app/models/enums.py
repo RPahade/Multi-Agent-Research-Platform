@@ -51,3 +51,22 @@ class ReportStatus(str, enum.Enum):
     DRAFT = "draft"
     FINAL = "final"
     ARCHIVED = "archived"
+
+
+class DocumentStatus(str, enum.Enum):
+    """Lifecycle of an uploaded source document."""
+
+    UPLOADED = "uploaded"      # stored, not yet parsed
+    PROCESSING = "processing"  # ingestion job running
+    INGESTED = "ingested"      # chunked + embedded, searchable
+    FAILED = "failed"
+
+
+class JobStepStatus(str, enum.Enum):
+    """Status of a single tool step within an orchestrated job."""
+
+    PENDING = "pending"
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    SKIPPED = "skipped"

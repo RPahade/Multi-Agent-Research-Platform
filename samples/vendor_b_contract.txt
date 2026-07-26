@@ -1,0 +1,64 @@
+VENDOR B — DATA INTELLIGENCE SUITE
+Master Services Agreement Extract
+Contract reference: VB-MSA-2026-207
+
+1. SCOPE
+
+Vendor B shall provide Acme Corporation with access to the Data Intelligence Suite,
+comprising analytics, reporting, and procurement benchmarking modules. This agreement
+covers an initial term of two years with automatic renewal for successive one-year terms
+unless terminated in accordance with Section 7.
+
+2. FEES AND PAYMENT
+
+The annual licence fee is USD 38,000 for up to 200 named users. Additional users are
+charged at USD 220 per user per year. Vendor B does not charge an onboarding fee, but
+professional services for custom integrations are billed at USD 1,400 per day. Fees are
+invoiced quarterly in arrears. Vendor B reserves the right to increase fees by up to 5%
+at each renewal, subject to 60 days notice.
+
+3. INFORMATION SECURITY
+
+Vendor B is certified to ISO/IEC 27001:2022, with the current certificate valid until
+March 2028. Vendor B has not obtained SOC 2 certification. Vendor B maintains an
+information security management system audited annually by an accredited certification
+body.
+
+Data is encrypted at rest using AES-256 and in transit using TLS 1.2 or higher. Key
+management is performed internally by Vendor B; customer-supplied keys are not supported
+under the standard agreement.
+
+All customer data is stored within the European Union, specifically in data centres
+located in Frankfurt, Germany and Dublin, Ireland. Vendor B does not transfer personal
+data outside the EEA. This arrangement supports GDPR compliance for European operations.
+
+Vendor B conducts penetration testing twice per year and shares full reports with
+customers under NDA. Critical vulnerabilities are remediated within 30 days.
+
+4. SERVICE LEVEL COMMITMENTS
+
+Vendor B guarantees 99.5% monthly availability. Service credits of 5% of the monthly fee
+apply for each full percentage point below the guaranteed level, capped at 20% of the
+monthly fee. Scheduled maintenance is capped at eight hours per month.
+
+Support is available during business hours (08:00 to 18:00 CET, Monday to Friday), with
+optional 24x7 coverage available for an additional USD 9,000 per year. Target response
+time for critical incidents is four hours.
+
+5. BREACH NOTIFICATION
+
+Vendor B shall notify Acme Corporation of any personal data breach without undue delay
+and in any event within 30 days of becoming aware of the breach, providing details
+required under Article 33 of the GDPR.
+
+6. LIABILITY
+
+Vendor B's aggregate liability under this agreement is limited to the total fees paid in
+the twelve months preceding the claim. Liability for data protection breaches is capped
+at twice the annual fee.
+
+7. TERMINATION
+
+Either party may terminate for material breach with 30 days notice to remedy. Acme may
+terminate for convenience at the end of any term with 90 days notice. On termination,
+data is exported in JSON format and deleted within 45 days.

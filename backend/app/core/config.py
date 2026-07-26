@@ -55,6 +55,33 @@ class Settings(BaseSettings):
     job_reaper_interval_seconds: int = 10
     job_heartbeat_stale_seconds: int = 30
 
+    # --- LLM (Milestone 6, step 2) ---
+    # Which provider the agent uses for synthesis: "openai" | "gemini" | "none".
+    llm_provider: str = "none"
+    openai_api_key: str | None = None
+    openai_model: str = "gpt-4o-mini"
+    gemini_api_key: str | None = None
+    gemini_model: str = "gemini-flash-latest"
+    # Tried in order if the primary model is overloaded/unavailable (503/429).
+    gemini_fallback_models: str = "gemini-flash-lite-latest,gemini-3-flash-preview"
+    llm_temperature: float = 0.2
+    llm_max_tokens: int = 2000
+
+    # --- Documents / RAG (Milestone 6, step 3) ---
+    upload_dir: str = "/app/data/uploads"
+    embedding_provider: str = "gemini"  # "gemini" | "openai" | "none"
+    embedding_model: str = "gemini-embedding-001"
+    # Must match the vector(N) column dimension in migration 0005.
+    embedding_dim: int = 768
+    chunk_size: int = 1000
+    chunk_overlap: int = 150
+    retrieval_top_k: int = 5
+
+    # --- MCP tools (Milestone 6, step 4) ---
+    mcp_enabled: bool = False
+    mcp_server_url: str = "http://mcp:8090/mcp"
+    mcp_timeout_seconds: float = 30.0
+
     @property
     def cors_origins_list(self) -> list[str]:
         """Parse the comma-separated CORS origins into a clean list."""

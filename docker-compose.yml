@@ -4,7 +4,8 @@
 
 services:
   db:
-    image: postgres:16
+    # pgvector image = postgres:16 + the `vector` extension (data volume stays compatible)
+    image: pgvector/pgvector:pg16
     container_name: mari-db
     restart: unless-stopped
     environment:
@@ -21,6 +22,14 @@ services:
       timeout: 5s
       retries: 10
 
+  # MCP server exposing self-contained tools (research/citation/PII redaction).
+  mcp:
+    build: ./mcp_server
+    container_name: mari-mcp
+    restart: unless-stopped
+    ports:
+      - "${MCP_PORT:-8090}:8090"
+
   backend:
     build: ./backend
     container_name: mari-backend
@@ -28,6 +37,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      mcp:
+        condition: service_started
     environment:
       APP_NAME: ${APP_NAME:-Multi-Agent Research Intelligence Platform}
       ENV: ${ENV:-development}
@@ -41,12 +52,30 @@ services:
       FIRST_ADMIN_EMAIL: ${FIRST_ADMIN_EMAIL:-admin@example.com}
       FIRST_ADMIN_PASSWORD: ${FIRST_ADMIN_PASSWORD:-ChangeMe123!}
       FIRST_ADMIN_NAME: ${FIRST_ADMIN_NAME:-Administrator}
+      LLM_PROVIDER: ${LLM_PROVIDER:-none}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-flash-latest}
+      LLM_TEMPERATURE: ${LLM_TEMPERATURE:-0.2}
+      LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-2000}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-gemini}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-gemini-embedding-001}
+      EMBEDDING_DIM: ${EMBEDDING_DIM:-768}
+      UPLOAD_DIR: ${UPLOAD_DIR:-/app/data/uploads}
+      CHUNK_SIZE: ${CHUNK_SIZE:-1000}
+      CHUNK_OVERLAP: ${CHUNK_OVERLAP:-150}
+      RETRIEVAL_TOP_K: ${RETRIEVAL_TOP_K:-5}
+      MCP_ENABLED: ${MCP_ENABLED:-true}
+      MCP_SERVER_URL: ${MCP_SERVER_URL:-http://mcp:8090/mcp}
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     volumes:
       # Live-reload friendly in dev: source + migrations mounted over the image copy.
       - ./backend/app:/app/app
       - ./backend/alembic:/app/alembic
+      # Uploaded source documents (browsable on the host)
+      - ./data/uploads:/app/data/uploads
     # Apply DB migrations, then start the API (auto-reload in dev).
     command: ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"]
 

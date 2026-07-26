@@ -7,7 +7,9 @@ Importing this package registers every model on ``Base.metadata`` — Alembic an
 from app.models.agent import Agent, AgentTool
 from app.models.audit import AuditLog
 from app.models.base import Base
+from app.models.document import Document, DocumentChunk
 from app.models.job import Job
+from app.models.job_step import JobStep
 from app.models.refresh_token import RefreshToken
 from app.models.report import Report, ReportVersion
 from app.models.tool import Tool
@@ -20,6 +22,9 @@ __all__ = [
     "AgentTool",
     "Tool",
     "Job",
+    "JobStep",
+    "Document",
+    "DocumentChunk",
     "Report",
     "ReportVersion",
     "AuditLog",

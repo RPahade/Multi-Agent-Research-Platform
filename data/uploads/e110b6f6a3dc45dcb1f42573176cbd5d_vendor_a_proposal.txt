@@ -1,0 +1,60 @@
+VENDOR A — CLOUD ANALYTICS PLATFORM
+Commercial Proposal for Acme Corporation
+Document reference: VA-2026-114
+
+1. EXECUTIVE SUMMARY
+
+Vendor A proposes its Cloud Analytics Platform to Acme Corporation under a three-year
+agreement. The platform provides data ingestion, warehousing, and dashboarding services
+for enterprise procurement teams. Vendor A has operated the platform since 2017 and
+currently serves 340 enterprise customers across North America and Western Europe.
+
+2. PRICING
+
+The annual subscription fee is USD 50,000 per year for up to 250 named users. Additional
+users are charged at USD 150 per user per year. A one-time onboarding and data migration
+fee of USD 12,000 applies in year one. Vendor A offers a 7% discount on the annual
+subscription if payment is made annually in advance rather than quarterly. Prices are
+fixed for the initial three-year term and may increase by no more than 3% annually
+thereafter. There are no charges for standard support or platform upgrades.
+
+3. DATA SECURITY AND COMPLIANCE
+
+Vendor A holds SOC 2 Type II certification, most recently audited in November 2025 by an
+independent third-party assessor. The platform is not currently ISO 27001 certified,
+although Vendor A states that certification is planned for Q4 2026.
+
+All customer data is encrypted at rest using AES-256 and in transit using TLS 1.3.
+Encryption keys are managed through AWS Key Management Service, and customers may elect
+to supply their own keys (BYOK) at no additional cost.
+
+Customer data is hosted exclusively in United States regions (us-east-1 and us-west-2).
+Vendor A does not currently offer European Union data residency. Data is replicated
+across three availability zones within the selected region.
+
+Vendor A performs annual penetration testing and provides the executive summary of the
+results to customers on request. Vulnerability patching follows a 15-day remediation
+window for critical findings.
+
+4. SERVICE LEVELS
+
+Vendor A guarantees 99.9% monthly uptime for the production environment. If uptime falls
+below this threshold, service credits are issued: 10% of the monthly fee for uptime
+between 99.0% and 99.9%, and 25% for uptime below 99.0%. Planned maintenance windows are
+excluded from the uptime calculation and are limited to four hours per month, scheduled
+outside of business hours.
+
+Support is provided 24x7 via portal and telephone. The target response time is one hour
+for critical (Severity 1) incidents and one business day for low-severity requests.
+
+5. DATA BREACH AND INCIDENT NOTIFICATION
+
+In the event of a confirmed data breach affecting customer data, Vendor A will notify the
+customer within 72 hours of confirmation. Notification includes the nature of the breach,
+categories of data affected, and remediation steps taken.
+
+6. TERMINATION AND DATA RETURN
+
+Either party may terminate for convenience with 90 days written notice. Upon termination,
+Vendor A will make customer data available for export in CSV and Parquet formats for a
+period of 30 days, after which data is permanently deleted within a further 60 days.

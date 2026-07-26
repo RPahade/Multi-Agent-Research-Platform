@@ -18,6 +18,14 @@ bcrypt==4.2.1
 python-multipart==0.0.20
 email-validator==2.2.0
 
+# --- Documents / RAG (Milestone 6, step 3) ---
+pypdf==5.1.0
+python-docx==1.1.2
+pgvector==0.3.6
+
+# --- MCP client (Milestone 6, step 4) ---
+mcp>=1.9,<2
+
 # --- Dev / test ---
 pytest==8.3.4
 httpx==0.28.1

@@ -24,6 +24,9 @@ def test_all_expected_tables_registered() -> None:
         "report_versions",
         "audit_logs",
         "refresh_tokens",
+        "job_steps",
+        "documents",
+        "document_chunks",
     }
     assert expected == set(models.Base.metadata.tables.keys())
 

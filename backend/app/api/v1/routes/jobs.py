@@ -21,6 +21,7 @@ from app.models.job import Job
 from app.models.user import User
 from app.schemas.common import Page, PageParams
 from app.schemas.job import JobCreate, JobRead
+from app.schemas.job_step import JobStepRead
 from app.services import job_runner, job_service
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
@@ -99,6 +100,20 @@ def get_job(
     _user: User = Depends(get_current_user),
 ) -> Job:
     return _get_or_404(db, job_id)
+
+
+@router.get(
+    "/{job_id}/steps",
+    response_model=list[JobStepRead],
+    summary="List a job's tool steps (orchestration trace)",
+)
+def list_job_steps(
+    job_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+) -> list:
+    _get_or_404(db, job_id)
+    return job_service.list_steps(db, job_id)
 
 
 @router.post("/{job_id}/cancel", response_model=JobRead, summary="Cancel a pending/running job")

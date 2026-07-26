@@ -57,6 +57,133 @@ Tools, Reports, Jobs), with migrations, and support for audit logging + versioni
 
 ---
 
+## [Milestone 6 — Agent Orchestration] — 2026-07-19/20 (step-by-step)
+
+### Step 4 of 4 — MCP tools ✅ (Milestone 6 COMPLETE)
+
+**Decisions:** move the self-contained tools (research/citation/compliance) to a separate
+MCP server over Streamable HTTP; keep retrieval + synthesis local; fall back to local tools
+if the MCP server is down; build our own now (extensible to third-party servers later).
+
+**Added:**
+- `mcp_server/` — standalone service (container `mari-mcp`, port 8090) using `FastMCP`
+  (official `mcp` SDK) exposing `web_research`, `verify_citations`, and `redact_pii`
+  (**real regex PII redaction**: email/phone/SSN/card).
+- `app/agent/mcp/client.py` — sync wrapper over the async MCP SDK (short-lived
+  Streamable-HTTP session per call, timeout, lazy SDK import); `call`, `list_tool_names`, `status`.
+- `app/agent/mcp/tools.py` — `MCPTool` + research/citation/compliance adapters (same `Tool`
+  interface) that forward to MCP and **fall back to the local tool** on failure.
+- `build_pipeline()` wraps those 3 tools when `MCP_ENABLED`; retrieval/synthesis stay local.
+- `GET /api/v1/mcp/status`; config `MCP_ENABLED`/`MCP_SERVER_URL`; `mcp>=1.9,<2`; compose `mcp`
+  service + backend `depends_on` + env.
+
+**Verified (live):** 14/14 — discovery lists the 3 tools; research/citation/compliance run
+`via:"mcp"` (retrieval stays local); real `redact_pii` produced 4 redactions on PII text;
+**stopping the MCP container → job still succeeded on local fallback** (`via:"local-fallback"`),
+then recovered when restarted.
+
+**Milestone 6 COMPLETE** — single agent orchestrating tools sequentially, real LLM synthesis,
+RAG retrieval, and MCP-based tools, with graceful partial-failure handling throughout.
+Built entirely in plain Python (no LangChain/LangGraph); Langfuse tracing remains a later milestone.
+
+### Step 3 of 4 — RAG: document ingestion & retrieval ✅
+
+**Decisions:** pgvector in Postgres; Gemini embeddings; originals saved to a mounted volume.
+
+**Added:**
+- Migration `0005_documents_rag` — `CREATE EXTENSION vector`; `documents` +
+  `document_chunks(embedding vector(768))` with an **HNSW cosine index**; `document_status` enum.
+  DB image switched to `pgvector/pgvector:pg16` (existing volume preserved).
+- `agent/llm/embeddings.py` — `EmbeddingClient` + Gemini/OpenAI adapters. Gemini
+  `gemini-embedding-001` at `outputDimensionality=768` (pgvector indexes cap at 2000 dims),
+  **L2-normalized client-side** since truncated Gemini vectors aren't unit-length.
+- `services/document_parser.py` (pypdf / python-docx / text) and `services/chunking.py`
+  (~1000 chars, 150 overlap, paragraph-aware, page numbers kept for citations).
+- `services/document_service.py` (storage, CRUD, **pgvector cosine search**) and
+  `services/ingestion_service.py` (parse → chunk → embed in batches of 32 → store), run as an
+  **ingestion job** so it reuses M5 progress/cancel/retry/SSE.
+- `agent/tools/retrieval.py` replaces the ingestion stub: embeds the query, retrieves top-K
+  chunks (optionally filtered by `input.document_ids`), feeds them to synthesis as cited
+  sources; falls back to inline `input.sources`.
+- `api/v1/routes/documents.py` — upload (multipart, 25 MB cap), list, get, **chunks**, delete.
+- **Gemini model failover** (`GEMINI_FALLBACK_MODELS`): 503 "high demand" on one model now
+  transparently falls through to the next.
+- `samples/vendor_{a,b}_*.txt` for manual testing.
+
+**Verified (live):** uploaded 2 documents → ingestion jobs succeeded → chunked + embedded →
+`retrieval` returned 5 chunks (top score 0.73) across 2 documents via vector search (not inline)
+→ **grounded, cited report** (EU residency + breach timelines) with `degraded=false`.
+Model failover proved out (primary 503 → `gemini-flash-lite-latest`). With `top_k=5` the model
+correctly declined a fact absent from the retrieved chunks; `top_k=12` retrieved it and answered
+fully — a clean demonstration of retrieval recall tuning.
+
+**Gotchas:** `DocumentChunk.text` shadows SQLAlchemy's `text()` (imported as `sa_text`);
+the pgvector image ships an older glibc → ran `ALTER DATABASE research REFRESH COLLATION VERSION`.
+
+**Next step:** step 4 = MCP tools behind the existing `Tool` interface.
+
+### Step 2 of 4 — LLM synthesis ✅
+
+**Decisions:** provider-agnostic (OpenAI + Gemini adapters); grounding via `input.sources`
+now; retry then fall back to the deterministic stub on LLM failure.
+
+**Added:**
+- `app/agent/llm/` — `LLMClient` interface + `OpenAIClient` + `GeminiClient` (raw httpx,
+  no SDK deps), `get_llm_client()` factory (from `LLM_PROVIDER`), `call_with_retry`
+  (backoff on 429/5xx/timeout), and `extract_json()` (tolerates code fences / trailing text).
+- `app/agent/tools/synthesis.py` — replaces FormattingTool in the pipeline; builds a grounded
+  prompt (query + sources + findings), gets a JSON report, records `generated_by`
+  (provider/model/usage); **falls back to a stub report** (`content.degraded=true`) if the LLM
+  is unavailable, so the job still succeeds.
+- Config/env: `LLM_PROVIDER`, `OPENAI_API_KEY`/`OPENAI_MODEL`, `GEMINI_API_KEY`/`GEMINI_MODEL`,
+  `LLM_TEMPERATURE`, `LLM_MAX_TOKENS` (+ `.env.example` and compose passthrough).
+- Pipeline reordered: `ingestion → research → synthesis → citation → compliance`.
+
+**Verified (live):**
+- Fallback path (no key) → stub report, job succeeds (5/5).
+- **Real LLM via Gemini `gemini-flash-latest`** → genuine grounded, cited report (6/6),
+  ~1.7k tokens, `degraded=false`.
+- Real provider errors handled gracefully end-to-end: OpenAI `429 quota exceeded` (no billing)
+  and Gemini `404` for retired model names both fell back cleanly.
+
+**Gotchas documented:** LLM model names are key-specific and change (`gemini-1.5/2.5-flash`
+404'd; `gemini-flash-latest` works — now the default); `docker compose up -d` (not `restart`)
+is required to load `.env` changes; LLMs emit trailing text even in JSON mode (handled by
+`extract_json`).
+
+**Next steps:** step 3 = RAG (upload/parse docs → chunk → embed → retrieve); step 4 = MCP tools.
+
+### Step 1 of 4 — sequential tool pipeline (own Python tools) + partial failures ✅
+
+**Decisions:** plain Python first (no framework/LLM/MCP yet); per-step results in a
+`job_steps` table; per-tool required/optional failure policy; pipeline produces a Report.
+
+**Added:**
+- `app/agent/base.py` — `Tool` ABC (`key/name/required`, `run(ctx)`), `ToolContext`
+  (threads `input` + `artifacts`), `ToolResult`. *This is the interface MCP will implement later.*
+- `app/agent/tools/` — 5 deterministic stub tools (ingestion, research, citation[optional],
+  formatting, compliance) + `build_pipeline()`.
+- `app/agent/orchestrator.py` — runs the pipeline sequentially inside a job: records each tool
+  as a `job_steps` row, updates progress/current_step (conditional; cancel-aware), applies the
+  required/optional failure policy, and writes/updates the job's Report.
+- Migration `0004_job_steps` + `JobStep` model + `JobStepStatus` enum; `GET /jobs/{id}/steps`
+  endpoint + `JobStepRead` schema.
+- `job_service`: `is_running`, `set_progress` (shared conditional update), `list_steps`.
+- `job_runner`: `type=research` now delegates to the orchestrator; the simulated pipeline
+  remains for non-research types.
+
+**Verified (live):** httpx e2e **17/17 passed** — happy path (5 steps in order, report linked
+to job), optional-tool failure (job still succeeds, report has warnings), required-tool failure
+(pipeline stops, job failed, no report), cancel mid-orchestration, and M5 simulated pipeline
+still works via `type=export`. Data kept.
+
+**Behavior note:** `type=research` = real orchestration; the old simulated pipeline
+(`steps`/`step_seconds`/`fail`) now runs for non-research job types only.
+
+**Next steps:** step 2 = Claude LLM synthesis; step 3 = RAG ingestion; step 4 = MCP tools.
+
+---
+
 ## [Milestone 5 — Background Task Execution] — 2026-07-19 (step-by-step)
 
 ### Step 1 of 3 — job creation, progress tracking, cancellation ✅
