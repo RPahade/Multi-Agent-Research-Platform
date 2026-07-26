@@ -62,7 +62,10 @@ reliability, observability.
 - [x] **Milestone 7 — Kafka Integration** ✅ DONE — KRaft broker + Kafka UI in compose; backend
   publishes real job lifecycle events to `agent.job.events`; file-replay producer + consumer
   service; verified live (real events + file replay both consumed).
-- [ ] Milestone 8 — *(awaiting details)*
+- [x] **Milestone 8 — API Documentation** ✅ DONE — request/response `examples` on all schemas
+  (Pydantic `json_schema_extra`), named `POST /jobs` examples, enriched OpenAPI metadata
+  (description + per-tag descriptions). Swagger `/docs`, ReDoc `/redoc`, `/openapi.json` all live.
+  **All 8 backend milestones complete.**
 
 > The user provides milestone requirements one at a time. Do **not** build ahead of
 > the current milestone. Ask for the next milestone's details when the current is done.

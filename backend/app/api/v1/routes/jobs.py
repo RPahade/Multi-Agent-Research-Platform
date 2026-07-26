@@ -8,8 +8,9 @@ from __future__ import annotations
 import asyncio
 import json
 import uuid
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response, status
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query, Request, Response, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -28,6 +29,41 @@ router = APIRouter(prefix="/jobs", tags=["jobs"])
 
 _TERMINAL = {JobStatus.SUCCEEDED.value, JobStatus.FAILED.value, JobStatus.CANCELLED.value}
 
+# Named request examples shown in Swagger's "Try it out" dropdown.
+_JOB_EXAMPLES = {
+    "rag_research": {
+        "summary": "Research over uploaded documents (RAG)",
+        "description": "Retrieves the top-K chunks from the given ingested documents and writes a cited report.",
+        "value": {
+            "type": "research",
+            "input": {
+                "query": "Compare Vendor A and Vendor B on data residency and pricing",
+                "document_ids": ["d4e5f6a7-0000-4000-8000-000000000004"],
+                "top_k": 8,
+            },
+        },
+    },
+    "inline_sources": {
+        "summary": "Research with inline source text (no upload)",
+        "description": "Provide source text directly; the agent cites it. Useful without documents.",
+        "value": {
+            "type": "research",
+            "input": {
+                "query": "Which vendor stores data in the EU?",
+                "sources": [
+                    {"title": "Vendor A Proposal", "text": "Vendor A hosts data exclusively in US regions."},
+                    {"title": "Vendor B Contract", "text": "Vendor B stores customer data in the EU (Frankfurt, Dublin)."},
+                ],
+            },
+        },
+    },
+    "simulated": {
+        "summary": "Simulated job (test progress/cancel/retry)",
+        "description": "Runs a timed placeholder pipeline. Use fail/fail_times to exercise the retry path.",
+        "value": {"type": "research", "input": {"steps": 6, "step_seconds": 1}},
+    },
+}
+
 
 def _get_or_404(db: Session, job_id: uuid.UUID) -> Job:
     job = job_service.get_job(db, job_id)
@@ -43,7 +79,7 @@ def _get_or_404(db: Session, job_id: uuid.UUID) -> Job:
     summary="Create a job and start it in the background",
 )
 def create_job(
-    payload: JobCreate,
+    payload: Annotated[JobCreate, Body(openapi_examples=_JOB_EXAMPLES)],
     response: Response,
     db: Session = Depends(get_db),
     user: User = Depends(require_job_writer),

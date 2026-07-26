@@ -57,6 +57,30 @@ Tools, Reports, Jobs), with migrations, and support for audit logging + versioni
 
 ---
 
+## [Milestone 8 — API Documentation] — 2026-07-26
+
+**Goal:** document all backend APIs with request/response examples. (OpenAPI generation and
+Swagger/ReDoc exposure were already in place since Milestone 1 — `/docs`, `/redoc`,
+`/openapi.json` — so this milestone focused on examples + polish.)
+
+### Added
+- **Request/response examples** on every API schema via Pydantic `json_schema_extra`
+  (`schemas/{auth,user,agent,tool,report,job,document,health}.py`) — shown in Swagger and
+  ReDoc for both request bodies and responses.
+- **Named request examples** on `POST /jobs` (`rag_research`, `inline_sources`, `simulated`)
+  via `Body(openapi_examples=...)` — a dropdown in Swagger's "Try it out".
+- **Enriched OpenAPI metadata** in `main.py`: a full API `description` (auth + typical flow),
+  `summary`, `contact`, `license_info`, and `openapi_tags` with per-tag descriptions (10 tags).
+
+### Verified (live)
+- `/openapi.json`, `/docs`, `/redoc` all return 200; schema-level `examples` present on
+  UserCreate/JobCreate/ReportRead/DocumentRead/HealthResponse/…; `POST /jobs` exposes the 3
+  named examples; 10 documented tag groups; test suite 11 passed.
+
+**All 8 backend milestones complete.**
+
+---
+
 ## [Milestone 7 — Kafka Integration] — 2026-07-26
 
 **Goal:** local Kafka + event-driven communication (producer from a file, consumer that logs,

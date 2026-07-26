@@ -20,6 +20,39 @@ from app.core.logging import configure_logging
 
 logger = logging.getLogger(__name__)
 
+_API_DESCRIPTION = """
+Backend API for the **Multi-Agent Research Intelligence Platform**.
+
+A single research **agent** orchestrates tools to ingest documents, retrieve relevant
+passages (RAG), synthesise **cited** reports, and redact PII — all as resilient,
+streamable background **jobs**, with **event-driven** updates over Kafka.
+
+### Authentication
+1. `POST /api/v1/auth/login` with your email + password (OAuth2 password form) to get an
+   access token. In Swagger, click **Authorize** and log in — all protected calls then
+   carry the token automatically.
+2. Roles: **admin** (manage users/config), **analyst** (run research), **leadership** (read-only).
+
+### Typical flow
+`POST /documents` (upload) → poll the ingestion job → `POST /jobs` (research over the docs)
+→ watch `GET /jobs/{id}/stream` (SSE) → read `GET /reports?job_id=...`.
+
+Interactive docs: **/docs** (Swagger UI) · **/redoc** (ReDoc). Schema: **/openapi.json**.
+""".strip()
+
+_TAGS_METADATA = [
+    {"name": "health", "description": "Liveness/readiness probes."},
+    {"name": "auth", "description": "Login, token refresh (rotation), logout, and current user."},
+    {"name": "users", "description": "User management (admin only)."},
+    {"name": "agents", "description": "Configurable orchestrating agents. Writes: admin."},
+    {"name": "tools", "description": "Configurable tools the agent can use. Writes: admin."},
+    {"name": "reports", "description": "Generated cited reports and their version history."},
+    {"name": "jobs", "description": "Async jobs: create, track progress, cancel, stream (SSE), per-tool steps."},
+    {"name": "documents", "description": "Upload/ingest source documents (RAG) and inspect their chunks."},
+    {"name": "mcp", "description": "Status of the external MCP tool server."},
+    {"name": "events", "description": "Kafka event pipeline configuration."},
+]
+
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
@@ -64,10 +97,11 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title=settings.app_name,
         version=settings.app_version,
-        description=(
-            "Multi-Agent Research Intelligence Platform — backend API. "
-            "Ingests documents, runs agent-driven research, and produces cited reports."
-        ),
+        description=_API_DESCRIPTION,
+        summary="Agent-driven research: ingest documents, retrieve, synthesise cited reports.",
+        contact={"name": "Multi-Agent Research Platform"},
+        license_info={"name": "Proprietary"},
+        openapi_tags=_TAGS_METADATA,
         docs_url="/docs",
         redoc_url="/redoc",
         openapi_url="/openapi.json",
