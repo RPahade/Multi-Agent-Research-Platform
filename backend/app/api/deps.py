@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import jwt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Query, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
@@ -16,6 +16,10 @@ from app.services import user_service
 
 # tokenUrl points at the login endpoint so Swagger's "Authorize" button works.
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.api_v1_prefix}/auth/login")
+# Optional variant (no auto-401) for endpoints that also accept a query-param token.
+oauth2_scheme_optional = OAuth2PasswordBearer(
+    tokenUrl=f"{settings.api_v1_prefix}/auth/login", auto_error=False
+)
 
 _CREDENTIALS_EXC = HTTPException(
     status_code=status.HTTP_401_UNAUTHORIZED,
@@ -24,11 +28,10 @@ _CREDENTIALS_EXC = HTTPException(
 )
 
 
-def get_current_user(
-    token: str = Depends(oauth2_scheme),
-    db: Session = Depends(get_db),
-) -> User:
-    """Decode the access token and return the active user, or raise 401."""
+def _resolve_user(db: Session, token: str | None) -> User:
+    """Validate an access token and return the active user, or raise 401."""
+    if not token:
+        raise _CREDENTIALS_EXC
     try:
         payload = decode_token(token)
     except jwt.PyJWTError as exc:
@@ -44,6 +47,27 @@ def get_current_user(
     if user is None or not user.is_active:
         raise _CREDENTIALS_EXC
     return user
+
+
+def get_current_user(
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db),
+) -> User:
+    """Decode the access token (from the Authorization header) and return the user."""
+    return _resolve_user(db, token)
+
+
+def get_current_user_sse(
+    token_query: str | None = Query(default=None, alias="token", description="Access token (for EventSource, which cannot set headers)"),
+    token_header: str | None = Depends(oauth2_scheme_optional),
+    db: Session = Depends(get_db),
+) -> User:
+    """Auth for SSE/streaming: accept the token from the ``?token=`` query param OR the header.
+
+    Browsers' native ``EventSource`` cannot set an Authorization header, so the frontend
+    passes the access token as a query parameter instead.
+    """
+    return _resolve_user(db, token_query or token_header)
 
 
 def require_roles(*roles: UserRole):

@@ -15,7 +15,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, require_job_writer
+from app.api.deps import get_current_user, get_current_user_sse, require_job_writer
 from app.db.session import SessionLocal, get_db
 from app.models.enums import JobStatus, JobType
 from app.models.job import Job
@@ -195,7 +195,7 @@ def _sse(data: dict) -> str:
 async def stream_job(
     job_id: uuid.UUID,
     request: Request,
-    _user: User = Depends(get_current_user),
+    _user: User = Depends(get_current_user_sse),
 ) -> StreamingResponse:
     """Server-Sent Events stream of a job's status/progress until it is terminal.
 
