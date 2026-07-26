@@ -57,6 +57,18 @@ Tools, Reports, Jobs), with migrations, and support for audit logging + versioni
 
 ---
 
+## [Frontend enablement] — 2026-07-26
+
+- **SSE query-param auth**: `GET /jobs/{id}/stream` now accepts the access token from
+  `?token=<access_token>` **or** the `Authorization` header — so the browser's native
+  `EventSource` (which can't set headers) works directly. Added `get_current_user_sse` +
+  `_resolve_user` in `api/deps.py`; `get_current_user` refactored onto the same helper.
+  Verified live: `?token=` streams (200), no/invalid token → 401.
+- **`FRONTEND.md`** added — self-contained frontend integration guide (contract, auth, RBAC,
+  endpoints, SSE) for building the Angular UI (in a separate chat).
+
+---
+
 ## [Milestone 8 — API Documentation] — 2026-07-26
 
 **Goal:** document all backend APIs with request/response examples. (OpenAPI generation and

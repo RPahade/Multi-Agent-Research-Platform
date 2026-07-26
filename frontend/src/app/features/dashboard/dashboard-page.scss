@@ -1,0 +1,28 @@
+.connection {
+  max-width: 520px;
+  margin-top: var(--space-5);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+dl {
+  display: grid;
+  grid-template-columns: 130px 1fr;
+  gap: var(--space-2) var(--space-4);
+  margin: var(--space-4) 0 0;
+}
+
+dt {
+  color: var(--color-text-muted);
+  font-size: 14px;
+}
+
+dd {
+  margin: 0;
+  font-weight: 500;
+}

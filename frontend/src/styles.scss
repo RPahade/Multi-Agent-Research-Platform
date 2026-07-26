@@ -1,0 +1,172 @@
+/* ==========================================================================
+   Global styles.
+
+   Everything is plain CSS custom properties ("design tokens") declared once
+   on :root. Components use them via var(--token) instead of hard-coded
+   colours, so the whole app restyles from this one file.
+   ========================================================================== */
+
+:root {
+  /* Brand + accents */
+  --color-primary: #2563eb;
+  --color-primary-dark: #1d4ed8;
+  --color-primary-soft: #eff6ff;
+
+  /* Neutrals */
+  --color-bg: #f6f7f9;
+  --color-surface: #ffffff;
+  --color-border: #e3e6ea;
+  --color-text: #1a1d21;
+  --color-text-muted: #6b7280;
+
+  /* Sidebar */
+  --color-sidebar: #16191d;
+  --color-sidebar-text: #b6bcc4;
+  --color-sidebar-active: #ffffff;
+
+  /* Status colours (job / document / report states) */
+  --color-success: #15803d;
+  --color-success-soft: #eaf7ee;
+  --color-warning: #b45309;
+  --color-warning-soft: #fdf3e3;
+  --color-danger: #b91c1c;
+  --color-danger-soft: #fdeced;
+  --color-info: #1d4ed8;
+  --color-info-soft: #eaf0fe;
+
+  /* Spacing scale */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  /* Shape + type */
+  --radius: 8px;
+  --radius-sm: 5px;
+  --shadow: 0 1px 3px rgba(16, 24, 40, 0.08);
+  --font: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'Cascadia Code', Consolas, 'Courier New', monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0 0 var(--space-3);
+  line-height: 1.25;
+}
+
+h1 {
+  font-size: 24px;
+}
+h2 {
+  font-size: 19px;
+}
+h3 {
+  font-size: 16px;
+}
+
+a {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+code {
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+/* --- Shared building blocks ------------------------------------------- */
+
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: var(--space-5);
+}
+
+.muted {
+  color: var(--color-text-muted);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.btn:hover:not(:disabled) {
+  border-color: var(--color-text-muted);
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--color-primary-dark);
+  border-color: var(--color-primary-dark);
+}
+
+/* Small coloured pill for statuses. Pair with a .badge-* modifier. */
+.badge {
+  display: inline-block;
+  padding: 2px var(--space-2);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--color-info-soft);
+  color: var(--color-info);
+}
+
+.badge-success {
+  background: var(--color-success-soft);
+  color: var(--color-success);
+}
+.badge-warning {
+  background: var(--color-warning-soft);
+  color: var(--color-warning);
+}
+.badge-danger {
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+}

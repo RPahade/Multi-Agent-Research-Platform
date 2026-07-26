@@ -1,0 +1,39 @@
+<h1>Dashboard</h1>
+<p class="muted">
+  Multi-Agent Research Intelligence Platform. The full dashboard is built in a
+  later milestone — for now this page confirms the frontend can reach the API.
+</p>
+
+<div class="card connection">
+  <div class="row">
+    <h2>Backend connection</h2>
+    <button class="btn" type="button" (click)="checkBackend()" [disabled]="loading()">
+      Re-check
+    </button>
+  </div>
+
+  @if (loading()) {
+    <p class="muted">Checking…</p>
+  } @else if (error()) {
+    <p><span class="badge badge-danger">Unreachable</span></p>
+    <p class="muted">{{ error() }}</p>
+    <p class="muted">
+      <small>Start it with <code>docker compose up -d</code> in the repo root.</small>
+    </p>
+  } @else if (health(); as info) {
+    <p><span class="badge badge-success">Connected</span></p>
+    <dl>
+      <dt>API</dt>
+      <dd>{{ info.app }}</dd>
+
+      <dt>Version</dt>
+      <dd>{{ info.version }}</dd>
+
+      <dt>Environment</dt>
+      <dd>{{ info.env }}</dd>
+
+      <dt>Database</dt>
+      <dd>{{ dbHealth()?.database ?? 'unknown' }}</dd>
+    </dl>
+  }
+</div>

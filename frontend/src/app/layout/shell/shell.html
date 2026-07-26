@@ -1,0 +1,33 @@
+<div class="shell">
+  <aside class="sidebar" [class.open]="menuOpen()">
+    <div class="brand">
+      <span class="brand-mark">MA</span>
+      <span class="brand-text">Research Intelligence</span>
+    </div>
+
+    <nav>
+      @for (link of links; track link.path) {
+        <a
+          [routerLink]="link.path"
+          routerLinkActive="active"
+          (click)="closeMenu()"
+        >
+          {{ link.label }}
+        </a>
+      }
+    </nav>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <button class="menu-btn" type="button" (click)="toggleMenu()">☰</button>
+      <span class="spacer"></span>
+      <!-- Milestone 10 replaces this with the signed-in user + sign out. -->
+      <span class="muted">Not signed in</span>
+    </header>
+
+    <main class="content">
+      <router-outlet />
+    </main>
+  </div>
+</div>
