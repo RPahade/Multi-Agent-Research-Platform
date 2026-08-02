@@ -1,7 +1,8 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { Router } from '@angular/router';
 
-import { Agent, Job, JobCreate } from '../../core/models';
+import { Agent, JobCreate } from '../../core/models';
 import { apiErrorMessage, apiFieldErrors } from '../../core/services/api-error';
 import { AgentsService } from '../agents/agents.service';
 import { DocumentUpload } from './document-upload';
@@ -24,6 +25,7 @@ export class NewJobPage implements OnInit {
   private readonly fb = inject(FormBuilder);
   private readonly jobs = inject(JobsService);
   private readonly agents = inject(AgentsService);
+  private readonly router = inject(Router);
 
   protected readonly toolKeys = TOOL_KEYS;
 
@@ -43,7 +45,6 @@ export class NewJobPage implements OnInit {
 
   protected readonly submitting = signal(false);
   protected readonly error = signal<string | null>(null);
-  protected readonly created = signal<Job | null>(null);
 
   /**
    * Sent as Idempotency-Key so a double submit returns the job already created
@@ -81,10 +82,11 @@ export class NewJobPage implements OnInit {
 
     this.jobs.create(this.buildPayload(), this.idempotencyKey).subscribe({
       next: (job) => {
-        this.created.set(job);
         this.submitting.set(false);
         // A new run should be a new job, not a repeat of this one.
         this.idempotencyKey = crypto.randomUUID();
+        // Straight to the live progress view — the job is already running.
+        this.router.navigate(['/jobs', job.id]);
       },
       error: (err) => {
         this.error.set(apiErrorMessage(err));
@@ -142,30 +144,6 @@ export class NewJobPage implements OnInit {
     }
   }
 
-  /** Refresh the created job so the confirmation shows its latest status. */
-  protected refreshCreated(): void {
-    const job = this.created();
-    if (!job) {
-      return;
-    }
-    this.jobs.get(job.id).subscribe({
-      next: (fresh) => this.created.set(fresh),
-      error: () => undefined,
-    });
-  }
-
-  protected startAnother(): void {
-    this.created.set(null);
-    this.error.set(null);
-    this.form.reset({
-      query: '',
-      top_k: DEFAULT_TOP_K,
-      max_attempts: 3,
-      agent_id: '',
-      fail_tool: '',
-      tool_seconds: 0.4,
-    });
-  }
 
   protected showError(field: string): boolean {
     const control = this.form.get(field);

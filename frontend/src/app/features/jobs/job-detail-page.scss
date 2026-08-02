@@ -1,0 +1,123 @@
+.crumb {
+  margin: 0 0 var(--space-3);
+  font-size: 14px;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.head h1 {
+  margin: 0;
+}
+
+section.card {
+  max-width: 820px;
+  margin-top: var(--space-4);
+}
+
+.status-line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.step {
+  font-weight: 500;
+}
+
+.spacer {
+  flex: 1;
+}
+
+/* Gentle pulse so it is obvious the view is receiving updates. */
+.live {
+  color: var(--color-success);
+  font-size: 13px;
+  font-weight: 600;
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live {
+    animation: none;
+  }
+}
+
+.progress {
+  height: 10px;
+  border-radius: 999px;
+  background: var(--color-border);
+  overflow: hidden;
+}
+
+.progress .bar {
+  display: block;
+  height: 100%;
+  background: var(--color-primary);
+  transition: width 0.3s ease;
+}
+
+.small {
+  font-size: 13px;
+}
+
+.retry {
+  margin: var(--space-3) 0 0;
+  color: var(--color-warning);
+  font-size: 14px;
+}
+
+dl {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  gap: var(--space-2) var(--space-4);
+  margin: var(--space-4) 0 0;
+}
+
+dt {
+  color: var(--color-text-muted);
+  font-size: 14px;
+}
+
+dd {
+  margin: 0;
+}
+
+.steps {
+  margin: 0;
+  padding-left: var(--space-5);
+}
+
+.steps li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-2) var(--space-2) 0;
+  border-radius: var(--radius-sm);
+}
+
+.steps li.active {
+  background: var(--color-primary-soft);
+}
+
+.steps .name {
+  font-weight: 500;
+}
+
+.report-title {
+  margin: 0 0 var(--space-1);
+  font-size: 17px;
+  font-weight: 600;
+}

@@ -30,6 +30,7 @@
     <ul class="feed">
       @for (job of items(); track job.id) {
         <li class="entry">
+          <div class="row-wrap">
           <button class="row" type="button" (click)="toggle(job)">
             <span class="marker">{{ expandedId() === job.id ? '▾' : '▸' }}</span>
 
@@ -54,6 +55,10 @@
               <span class="pct muted">{{ job.progress }}%</span>
             </span>
           </button>
+
+          <!-- Separate from the expand button: a link cannot live inside one. -->
+          <a class="open" [routerLink]="['/jobs', job.id]">Open</a>
+          </div>
 
           @if (job.error) {
             <p class="job-error">{{ job.error }}</p>

@@ -40,6 +40,17 @@
   border-top: none;
 }
 
+.row-wrap {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.open {
+  flex-shrink: 0;
+  font-size: 13px;
+}
+
 /* The whole row is the expand control. */
 .row {
   display: flex;

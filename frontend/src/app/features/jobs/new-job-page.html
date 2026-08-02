@@ -1,46 +1,10 @@
-@if (created(); as job) {
-  <!-- Confirmation. Live progress and the step trace come in the next milestone. -->
-  <h1>Research job started</h1>
+<h1>New research job</h1>
+<p class="muted">
+  Ask a question, choose which documents to search, and the agent will produce a
+  cited report. You'll be taken to the live progress view once it starts.
+</p>
 
-  <div class="card box">
-    <p class="form-success">The job was accepted and is running in the background.</p>
-
-    <dl>
-      <dt>Job</dt>
-      <dd><code>{{ job.id }}</code></dd>
-
-      <dt>Status</dt>
-      <dd>{{ job.status }} · {{ job.progress }}%</dd>
-
-      <dt>Current step</dt>
-      <dd>{{ job.current_step ?? '—' }}</dd>
-
-      @if (job.error) {
-        <dt>Error</dt>
-        <dd class="error-text">{{ job.error }}</dd>
-      }
-    </dl>
-
-    <div class="actions">
-      <button class="btn" type="button" (click)="refreshCreated()">Refresh status</button>
-      <button class="btn btn-primary" type="button" (click)="startAnother()">
-        Start another
-      </button>
-    </div>
-
-    <p class="field-hint">
-      Live progress streaming and the per-tool trace arrive in the next milestone.
-      The dashboard's activity feed already shows this job.
-    </p>
-  </div>
-} @else {
-  <h1>New research job</h1>
-  <p class="muted">
-    Ask a question, choose which documents to search, and the agent will produce a
-    cited report.
-  </p>
-
-  <form class="box" [formGroup]="form" (ngSubmit)="submit()">
+<form class="box" [formGroup]="form" (ngSubmit)="submit()">
     @if (error()) {
       <p class="form-error">{{ error() }}</p>
     }
@@ -203,5 +167,4 @@
         <span class="muted">Waiting for uploads to finish ingesting…</span>
       }
     </div>
-  </form>
-}
+</form>

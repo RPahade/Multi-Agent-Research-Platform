@@ -19,6 +19,7 @@ env/
 .ruff_cache/
 .coverage
 htmlcov/
+data/
 
 # --- Node / Angular (frontend, later milestones) ---
 node_modules/

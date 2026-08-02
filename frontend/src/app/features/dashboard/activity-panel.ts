@@ -2,6 +2,7 @@ import { DatePipe } from '@angular/common';
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 
 import { Job, JobStatus, JobStep, JobType } from '../../core/models';
 import { apiErrorMessage } from '../../core/services/api-error';
@@ -27,7 +28,7 @@ const JOB_TYPES: JobType[] = ['research', 'ingestion', 'export'];
  */
 @Component({
   selector: 'app-activity-panel',
-  imports: [ReactiveFormsModule, DatePipe, StatusBadge, EmptyState],
+  imports: [ReactiveFormsModule, RouterLink, DatePipe, StatusBadge, EmptyState],
   templateUrl: './activity-panel.html',
   styleUrl: './activity-panel.scss',
 })

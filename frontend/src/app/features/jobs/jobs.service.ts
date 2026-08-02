@@ -38,4 +38,12 @@ export class JobsService {
   steps(id: string): Observable<JobStep[]> {
     return this.api.get<JobStep[]>(`/jobs/${id}/steps`);
   }
+
+  /**
+   * Stop a pending or running job. Analyst + admin only.
+   * Answers 409 if the job already finished.
+   */
+  cancel(id: string): Observable<Job> {
+    return this.api.post<Job>(`/jobs/${id}/cancel`);
+  }
 }

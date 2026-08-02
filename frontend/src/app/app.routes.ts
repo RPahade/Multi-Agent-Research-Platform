@@ -54,6 +54,14 @@ export const routes: Routes = [
           import('./features/jobs/new-job-page').then((m) => m.NewJobPage),
       },
       {
+        // Must stay AFTER 'jobs/new', or 'new' would be matched as an :id.
+        // Readable by every role; the cancel button is gated inside the page.
+        path: 'jobs/:id',
+        title: 'Job progress',
+        loadComponent: () =>
+          import('./features/jobs/job-detail-page').then((m) => m.JobDetailPage),
+      },
+      {
         path: 'reports',
         title: 'Reports',
         loadComponent: () =>

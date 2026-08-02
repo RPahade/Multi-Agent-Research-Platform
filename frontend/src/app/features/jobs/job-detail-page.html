@@ -1,0 +1,138 @@
+<p class="crumb"><a routerLink="/jobs">← All research jobs</a></p>
+
+@if (loading()) {
+  <p class="muted">Loading job…</p>
+} @else if (error()) {
+  <div class="card">
+    <h1>Job unavailable</h1>
+    <p class="form-error">{{ error() }}</p>
+  </div>
+} @else if (job(); as job) {
+  <div class="head">
+    <h1>Research job</h1>
+    @if (canCancel()) {
+      <button class="btn" type="button" (click)="cancel()" [disabled]="cancelling()">
+        {{ cancelling() ? 'Stopping…' : 'Cancel job' }}
+      </button>
+    }
+  </div>
+
+  @if (cancelError()) {
+    <p class="form-error">{{ cancelError() }}</p>
+  }
+
+  <!-- Progress -->
+  <section class="card">
+    <div class="status-line">
+      <app-status-badge [status]="job.status" />
+      <span class="step">{{ job.current_step ?? 'Waiting to start…' }}</span>
+      <span class="spacer"></span>
+      @if (liveMode() === 'stream') {
+        <span class="live">● live</span>
+      } @else if (liveMode() === 'polling') {
+        <span class="muted small">updating every 1.5s</span>
+      }
+    </div>
+
+    <div class="progress">
+      <span class="bar" [style.width.%]="job.progress"></span>
+    </div>
+    <span class="muted small">{{ job.progress }}%</span>
+
+    @if (job.attempts > 1) {
+      <p class="retry">
+        Attempt {{ job.attempts }} of {{ job.max_attempts }} — this job was retried
+        after a failure.
+      </p>
+    }
+
+    @if (job.error) {
+      <p class="form-error">{{ job.error }}</p>
+    }
+
+    <dl>
+      <dt>Job id</dt>
+      <dd><code>{{ job.id }}</code></dd>
+
+      <dt>Type</dt>
+      <dd>{{ job.type }}</dd>
+
+      @if (job.input['query']) {
+        <dt>Topic</dt>
+        <dd>{{ job.input['query'] }}</dd>
+      }
+
+      <dt>Started</dt>
+      <dd>{{ job.started_at ? (job.started_at | date: 'medium') : '—' }}</dd>
+
+      <dt>Finished</dt>
+      <dd>
+        {{ job.finished_at ? (job.finished_at | date: 'medium') : '—' }}
+        @if (duration(); as d) {
+          <span class="muted">({{ d }})</span>
+        }
+      </dd>
+    </dl>
+  </section>
+
+  <!-- Per-tool status -->
+  <section class="card">
+    <h2>Pipeline</h2>
+
+    <ol class="steps">
+      @for (step of stepRows(); track step.key) {
+        <li [class.active]="step.status === 'running'">
+          <app-status-badge [status]="step.status" />
+          <span class="name">{{ step.name }}</span>
+          <code>{{ step.key }}</code>
+          @if (!step.required) {
+            <span class="muted small">optional</span>
+          }
+          @if (step.finishedAt) {
+            <span class="muted small">{{ step.finishedAt | date: 'mediumTime' }}</span>
+          }
+          @if (step.error) {
+            <span class="field-error">{{ step.error }}</span>
+          }
+        </li>
+      }
+    </ol>
+
+    @if (job.status === 'cancelled') {
+      <p class="field-hint">
+        Steps above are what actually ran before the job was stopped. A cancelled
+        job can still report 0% — the backend drops the final progress write when
+        the job leaves the running state, so trust the steps, not the percentage.
+      </p>
+    }
+  </section>
+
+  <!-- Result -->
+  @if (isTerminal()) {
+    <section class="card">
+      <h2>Result</h2>
+
+      @if (report(); as report) {
+        <p class="report-title">{{ report.title }}</p>
+        @if (report.summary) {
+          <p class="muted">{{ report.summary }}</p>
+        }
+        <p class="muted small">
+          Version {{ report.version }} · {{ report.status }}
+          @if (report.content.degraded) {
+            · <span class="badge badge-warning">degraded</span> the language model was
+            unavailable, so this is a fallback report
+          }
+        </p>
+        <p class="field-hint">
+          The full report view — sections, citations and version history — is built
+          in a later milestone.
+        </p>
+      } @else if (job.status === 'succeeded') {
+        <p class="muted">This job finished but no report is linked to it.</p>
+      } @else {
+        <p class="muted">No report was produced — the job {{ job.status }}.</p>
+      }
+    </section>
+  }
+}

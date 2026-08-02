@@ -44,13 +44,14 @@ background job and produces a cited report. Three roles — `admin` (governance)
 | 10 | Authentication UI — login, registration, JWT handling, route guards | ✅ done |
 | 11 | Dashboard — paginated reports, agent status, recent logs, filter/sort | ✅ done |
 | 12 | Research Job Form — topic, upload, configuration, validation | ✅ done |
-| 13 | *to be confirmed* | next |
-| 14–16 | *to be confirmed* | planned |
+| 13 | Progress View — live SSE progress, per-tool status, cancel | ✅ done |
+| 14 | *to be confirmed* | next |
+| 15–16 | *to be confirmed* | planned |
 
 *(The user supplies each milestone's definition; do not assume the remaining titles.
-Still unbuilt and expected somewhere in M13–M16: live SSE job progress with the
-step-by-step trace and cancel, report detail with citations and versions, a documents
-management screen, and the users/agents/tools CRUD write screens.)*
+Still unbuilt and expected somewhere in M14–M16: report detail with sections,
+citations and version history; a documents management screen; and the
+users/agents/tools CRUD write screens.)*
 
 ### Workflow convention (per milestone)
 1. **Design first** — propose the approach, confirm decisions.
@@ -61,7 +62,7 @@ management screen, and the users/agents/tools CRUD write screens.)*
 
 ---
 
-## 4. Current state — what EXISTS right now (after Milestone 12)
+## 4. Current state — what EXISTS right now (after Milestone 13)
 
 ### Folder structure
 
@@ -102,8 +103,9 @@ frontend/
                                # activity-panel (all real)
         users/                 # UsersPage (placeholder), CreateUserPage (real),
                                # users.service.ts
-        jobs/                  # NewJobPage + document-upload, pipeline-preview,
-                               # jobs.service.ts (JobsPage itself is a placeholder)
+        jobs/                  # JobsPage (list), JobDetailPage (live progress),
+                               # NewJobPage, document-upload, pipeline-preview,
+                               # jobs.service.ts, job-stream.service.ts
         reports/ agents/ documents/          # placeholder pages + their API services
         tools/ forbidden/ not-found/
 ```
@@ -131,10 +133,12 @@ requires a signed-in user (`authGuard` on the parent route).
 | `/login` | `LoginPage` | `guestGuard` | **real** |
 | `/` | → redirects to `/dashboard` | | |
 | `/dashboard` | `DashboardPage` | auth | **real** — full dashboard (M11) |
+| `/jobs` | `JobsPage` | auth | **real** — paginated job list (M13) |
 | `/jobs/new` | `NewJobPage` | auth + `roleGuard(['admin','analyst'])` | **real** — research form (M12) |
+| `/jobs/:id` | `JobDetailPage` | auth | **real** — live progress (M13) |
 | `/users/new` | `CreateUserPage` | auth + `roleGuard(['admin'])` | **real** — registration |
 | `/users` | `UsersPage` | auth + `roleGuard(['admin'])` | placeholder |
-| `/documents` `/jobs` `/reports` `/agents` `/tools` | feature pages | auth | placeholder |
+| `/documents` `/reports` `/agents` `/tools` | feature pages | auth | placeholder |
 | `/forbidden` | `ForbiddenPage` | auth | real |
 | `**` | `NotFoundPage` | — | real |
 
@@ -234,6 +238,48 @@ each success, so a double-click returns the existing job instead of starting a s
   is labelled accordingly — **delete that label once the backend honours it.**
 
 Both are logged in `../BACKEND_CHANGES_REQUIRED_FOR_FE.md` (items 2 and 3).
+
+### Live progress view (Milestone 13)
+
+`/jobs/:id`, readable by every role; **cancel** is shown only to admin/analyst and only
+while the job is pending or running (`POST /jobs/{id}/cancel` is `require_job_writer`).
+Submitting `/jobs/new` now navigates straight here — M12's static confirmation card is
+gone.
+
+**Transport.** Native `EventSource` on `/jobs/{id}/stream?token=<access_token>`, wrapped
+by `job-stream.service.ts`. Events are unnamed `data:` frames carrying
+`{id, status, progress, current_step, attempts, error}`.
+
+🔴 **`source.close()` on a terminal status is mandatory, not tidy-up.** The backend ends
+the stream when a job finishes, and `EventSource` treats a closed stream as an error and
+**reconnects forever**. Without the explicit close this becomes an infinite request loop
+against a finished job. There is a regression test for exactly this (asserts the stream
+is opened exactly once). The same applies in `onerror`.
+
+**Polling fallback.** Any stream error closes the stream and falls back to polling
+`GET /jobs/{id}` every 1.5 s. This is also the fix for token expiry: the access token is
+baked into the stream URL and dies after ~30 min, but polling goes through `HttpClient`
+→ the auth interceptor → automatic refresh. The view shows which mode is active
+("● live" vs "updating every 1.5s").
+
+**Steps are not streamed.** The SSE payload is job-level only, so the per-tool trace is
+fetched from `GET /jobs/{id}/steps` and refetched whenever `current_step` changes. Step
+rows only exist once a tool starts, so the view merges them over the known five-tool
+pipeline and shows the rest as `pending`.
+
+⚠️ **A cancelled job can report `progress: 0` even after a step succeeded.** Progress
+writes are conditional on `status='running'`, so the cancel drops the last one. The steps
+list is the truthful record — the UI says so on cancelled jobs.
+
+**409 on cancel is not an error.** It means the job finished while the confirm dialog was
+open, so the page refreshes and shows the real outcome instead of an error banner.
+
+**On "fetch updates via Kafka":** the backend's SSE is fed by short DB reads, not by
+Kafka. Kafka carries the same `JobEvent` messages to server-side consumers; there is no
+browser-facing bridge and a browser cannot speak the Kafka protocol. SSE is the transport.
+
+**Testing note:** puppeteer's `waitUntil: 'networkidle0'` never fires on this page — the
+stream deliberately holds a connection open. Use `domcontentloaded`.
 
 ### Models (`core/models/`)
 
@@ -357,6 +403,25 @@ including a **real end-to-end research run**:
   *"Vendor Comparison Report: Vendor A vs. Vendor B"*, 3 sections, 5 citations,
   `degraded=false` (a genuine LLM report, not the fallback stub).
 - *Refresh status* re-reads the job; *Start another* returns to an empty form.
+  *(Both were replaced in M13 — submitting now goes straight to the live progress view.)*
+
+**Milestone 13** — 22 automated browser checks against the live backend, all passing:
+
+- Progress advanced live through `0% → 20% → 40% → 60% → 80% → 100%` with the current
+  step tracking each tool, and the "● live" indicator shown while streaming.
+- **The stream is opened exactly once and never reconnects** — the regression test for
+  the `close()` requirement above.
+- **Opening an already-finished job opens no stream at all** (0 requests).
+- All five tools render with status; all `succeeded` after a successful run.
+- The produced report appears on completion.
+- Cancel: offered while running, hidden when terminal; cancelling flipped the job to
+  `cancelled` in both the UI and the API, and the steps correctly showed
+  `running, pending, pending, pending, pending` — only what actually ran.
+- A forced **409** on cancel refreshed the state instead of showing an error.
+- Jobs list renders, its filter reaches the API (`status=cancelled`), and a row opens
+  its progress view.
+- Submitting `/jobs/new` lands on `/jobs/:id`.
+- Leadership can view a progress page but is **not** offered cancel.
 
 ---
 
@@ -398,14 +463,9 @@ including a **real end-to-end research run**:
 
 ## 8. Next steps
 
-**Milestone 13 is not yet defined** — the user supplies each milestone. These are the
+**Milestone 14 is not yet defined** — the user supplies each milestone. These are the
 pieces still missing, with the groundwork already in place:
 
-- **Live job progress** — the natural follow-on from M12. `jobs.service.ts` has
-  list/get/steps and `create()`; still to build: consuming `GET /jobs/{id}/stream` with
-  native `EventSource` and `?token=<access_token>`, the live step trace, and
-  `POST /jobs/{id}/cancel`. `/jobs/new` currently ends at a static confirmation with a
-  *Refresh status* button, which is where streaming plugs in.
 - **Report detail** — `reports.service.ts` has get/versions; the content renderer
   (sections, citations, degraded banner) and version history are not built.
 - **Documents screen** — `documents.service.ts` has list/get/chunks/upload; a management

@@ -1,0 +1,77 @@
+<div class="head">
+  <div>
+    <h1>Research jobs</h1>
+    <p class="muted">Every run, newest first. Open one to watch it live.</p>
+  </div>
+
+  @if (canCreate()) {
+    <a class="btn btn-primary" routerLink="/jobs/new">New research</a>
+  }
+</div>
+
+<section class="card">
+  <div class="filters">
+    <select [formControl]="typeControl" aria-label="Filter by job type">
+      <option value="">All types</option>
+      @for (type of types; track type) {
+        <option [value]="type">{{ type }}</option>
+      }
+    </select>
+    <select [formControl]="statusControl" aria-label="Filter by job status">
+      <option value="">All statuses</option>
+      @for (status of statuses; track status) {
+        <option [value]="status">{{ status }}</option>
+      }
+    </select>
+    <button class="btn" type="button" (click)="load()" [disabled]="loading()">Refresh</button>
+  </div>
+
+  @if (error()) {
+    <p class="form-error">{{ error() }}</p>
+  }
+
+  @if (loading()) {
+    <p class="muted">Loading…</p>
+  } @else if (items().length === 0) {
+    <app-empty-state message="No jobs match these filters." />
+  } @else {
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Job</th>
+            <th>Type</th>
+            <th>Status</th>
+            <th>Progress</th>
+            <th>Created</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (job of items(); track job.id) {
+            <tr>
+              <td>
+                <a [routerLink]="['/jobs', job.id]" class="label">{{ label(job) }}</a>
+                @if (job.attempts > 1) {
+                  <span class="muted small">attempt {{ job.attempts }}/{{ job.max_attempts }}</span>
+                }
+              </td>
+              <td>{{ job.type }}</td>
+              <td><app-status-badge [status]="job.status" /></td>
+              <td class="num">{{ job.progress }}%</td>
+              <td>{{ job.created_at | date: 'short' }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+
+  <app-paginator
+    [page]="page()"
+    [size]="size()"
+    [total]="total()"
+    [pages]="pages()"
+    (pageChange)="onPage($event)"
+    (sizeChange)="onSize($event)"
+  />
+</section>

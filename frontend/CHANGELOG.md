@@ -7,6 +7,84 @@ Backend history lives in the repo-root `CHANGELOG.md`.
 
 ---
 
+## [Milestone 13 — Progress View] — 2026-08-02
+
+**Goal:** Real-time job progress with a progress bar and per-tool status indicators,
+updates via SSE (or polling), and job cancellation.
+
+**Contract verified live before building** — `?token=` streaming works with unnamed
+`data:` frames; an already-terminal job emits one event then closes; a bad token gives
+401; cancel gives 403 for leadership, 200 for analyst, and **409** on an already-finished
+job.
+
+### Decisions (confirmed with user)
+- **The jobs list was built too**, so progress views are reachable rather than depending
+  on the dashboard feed or a fresh submit.
+- **Submitting `/jobs/new` navigates straight to the live progress view**, replacing
+  M12's static confirmation card — that card only existed because streaming did not yet.
+
+### Added
+- **`features/jobs/job-stream.service.ts`** — wraps native `EventSource` on
+  `/jobs/{id}/stream?token=…` as an Observable that completes on a terminal status.
+  Re-enters Angular's zone in the handlers so signal writes render.
+  🔴 **Closes the stream explicitly on terminal status and on error.** This is required,
+  not tidy-up: the backend ends the stream when a job finishes, and `EventSource` treats
+  a closed stream as an error and reconnects *forever*. A regression check asserts the
+  stream is opened exactly once.
+- **`features/jobs/job-detail-page`** — the progress view at `/jobs/:id`: status badge,
+  progress bar, current step, retry-attempt notice, timings and duration, the five
+  pipeline tools as status indicators, and the produced report once finished.
+  - **Polling fallback**: any stream error falls back to polling `GET /jobs/{id}` every
+    1.5 s. This also solves token expiry — the token is baked into the stream URL and
+    dies after ~30 min, but polling goes through the auth interceptor, which refreshes it.
+    The view shows which mode is active.
+  - **Steps are not streamed**, so the trace is refetched from `GET /jobs/{id}/steps`
+    whenever `current_step` changes, merged over the known pipeline so tools that have
+    not started yet still appear as `pending`.
+  - **Cancel** with a confirm; a **409** means the job finished while the dialog was
+    open, so the page refreshes and shows the real outcome rather than an error.
+  - Notes on a cancelled job that progress can read 0% even after a step succeeded —
+    progress writes are conditional on `status='running'`, so the cancel drops the last
+    one, and the steps list is the truthful record.
+- **`features/jobs/jobs-page`** — replaced the placeholder with a real paginated list:
+  status and type filters, attempt counts, and each row linking to its progress view.
+- **`JobsService.cancel()`**.
+
+### Changed
+- **`app.routes.ts`** — added `/jobs/:id`, placed after `jobs/new` so `new` is not
+  matched as an id. Readable by every role; cancel is gated inside the page.
+- **`features/jobs/new-job-page`** — on success it now navigates to `/jobs/:id`; the
+  confirmation card, *Refresh status* and *Start another* were removed.
+- **`features/dashboard/activity-panel`** — each entry gets an *Open* link to its
+  progress view, placed outside the expand button (a link cannot live inside one).
+
+### Verified
+22 automated browser checks against the live backend, all passing:
+- progress advanced live `0% → 20% → 40% → 60% → 80% → 100%` with the step name tracking
+  each tool, and the live indicator visible while streaming
+- **the stream opened exactly once and never reconnected** after closing
+- **an already-finished job opened no stream at all**
+- all five tools rendered with status, all `succeeded` after a good run, and the report
+  appeared on completion
+- cancel offered while running and hidden when terminal; cancelling flipped the job to
+  `cancelled` in both UI and API, with steps showing
+  `running, pending, pending, pending, pending` — only what actually ran
+- a forced 409 on cancel refreshed the state instead of erroring
+- jobs list renders, its filter reaches the API, and rows open the progress view
+- submitting the form lands on `/jobs/:id`
+- leadership can view progress but is not offered cancel
+
+Production build clean, no warnings: initial 313.33 kB (90.97 kB transfer).
+
+**Testing note:** puppeteer's `waitUntil: 'networkidle0'` never fires on the progress
+page — the stream deliberately holds a connection open. Use `domcontentloaded`.
+
+### Not done yet (by design)
+The report shown on completion is title + summary only; the full renderer (sections,
+citations, version history) belongs to a later milestone.
+
+---
+
 ## [Milestone 12 — Research Job Form] — 2026-08-02
 
 **Goal:** A form for creating research jobs — topic input and document upload, tool
