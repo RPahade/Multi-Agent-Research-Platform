@@ -7,7 +7,7 @@
 > Every item below was **verified against the live API** (`http://localhost:8000/openapi.json`
 > plus real requests), not assumed. Each says what the frontend does today without it.
 >
-> _Last updated: 2026-08-02, after frontend Milestone 11 (Dashboard)._
+> _Last updated: 2026-08-02, after frontend Milestone 12 (Research Job Form)._
 
 ---
 
@@ -16,12 +16,15 @@
 | # | Request | Priority | Blocking? |
 |---|---------|:---:|---|
 | 1 | Sorting (`sort_by` + `order`) on list endpoints | **High** | Partially blocks the M11 "sorting" requirement |
-| 2 | Expose `audit_logs` via an API endpoint | Medium | No — jobs feed used instead |
-| 3 | Report export (DOCX / PDF download) | Medium | Will block a "download report" feature |
-| 4 | `q` search + date filters on `GET /jobs` | Low | No |
-| 5 | A single dashboard summary/counts endpoint | Low | No — 6 calls used instead |
-| 6 | CORS origin for a deployed frontend | Low | Only for non-dev deployment |
-| 7 | Clean up leftover test rows | Low | No — cosmetic |
+| 2 | Per-job tool selection (`input.tools`) | **High** | Partially blocks the M12 "tool configuration" requirement |
+| 3 | Make `agent_id` actually drive prompt/model | **High** | The field is accepted but has no effect |
+| 4 | Reject unknown query params instead of ignoring them | Medium | No — but it hides bugs like #1 |
+| 5 | Expose `audit_logs` via an API endpoint | Medium | No — jobs feed used instead |
+| 6 | Report export (DOCX / PDF download) | Medium | Will block a "download report" feature |
+| 7 | `q` search + date filters on `GET /jobs` | Low | No |
+| 8 | A single dashboard summary/counts endpoint | Low | No — 6 calls used instead |
+| 9 | CORS origin for a deployed frontend | Low | Only for non-dev deployment |
+| 10 | Clean up leftover test rows | Low | No — cosmetic |
 
 **Already delivered by the backend** (thank you — no action needed):
 - ✅ **Query-param token on the SSE stream** (`GET /jobs/{id}/stream?token=…`), which lets
@@ -106,7 +109,93 @@ them. Silent acceptance is what made this bug invisible in the first place.
 
 ---
 
-## 2. Expose `audit_logs` through an API — Medium
+## 2. Per-job tool selection — **High priority**
+
+### The problem
+
+The tool pipeline is **fixed and not configurable per job**. In
+`app/agent/orchestrator.py`:
+
+```python
+pipeline = build_pipeline()          # takes no arguments
+```
+
+and `app/agent/tools/__init__.py` returns a hard-coded list:
+`retrieval → research → synthesis → citation → compliance`.
+
+Consequences:
+
+- **The `tools` table is never consulted at runtime.** A tool row's `enabled` flag has
+  no effect on any job — the pipeline instantiates tool classes directly.
+- **MCP-vs-local is a server setting**, not a per-job choice (`settings.mcp_enabled`).
+- Nothing in `job.input` can add, remove or reorder a step.
+
+### Why it matters
+
+A frontend milestone asked for "allow tool configuration". The only honest thing the UI
+can offer today is a **read-only** pipeline preview, because any tool picker would be
+sending values the backend discards.
+
+### What the frontend does today
+
+`/jobs/new` shows the five steps read-only, each labelled MCP or local and required or
+optional, with a note saying the sequence is fixed by the backend. It configures only
+what the backend genuinely honours: `input.query`, `input.document_ids`, `input.top_k`,
+`max_attempts`, and the `fail_tool` / `tool_seconds` test hooks.
+
+### Requested
+
+Let a job choose its pipeline, e.g. `input.tools: ["retrieval","synthesis","compliance"]`
+passed through to `build_pipeline(selected)`. Validate against the known tool keys
+(422 on anything unknown), and keep the full pipeline as the default when omitted.
+Honouring the `tools` table's `enabled` flag would be a reasonable alternative.
+
+---
+
+## 3. Make `agent_id` actually affect execution — **High priority**
+
+### The problem
+
+`POST /jobs` accepts `agent_id`, stores it on the job, and **nothing ever reads it
+during execution**. Verified: no reference to `agent_id` anywhere in `app/agent/` or
+`app/services/job_runner.py`, and `system_prompt` appears nowhere in the agent package.
+
+The `agents` table carries `system_prompt`, `model` and `config` (temperature, etc.),
+but `SynthesisTool` uses the globally configured provider and model instead.
+
+### Why it matters
+
+Configurable agents are a headline feature — the Agents CRUD screens exist to edit a
+prompt and model that currently change nothing. Selecting "Vendor Analyzer" versus
+"Compliance Reviewer" produces identical output.
+
+### What the frontend does today
+
+The agent picker on `/jobs/new` is labelled honestly: *"Recorded on the job for
+provenance. The backend does not yet use it to change the prompt or model, so picking
+one will not alter the result."* That label should be deleted once this is fixed.
+
+### Requested
+
+When a job has an `agent_id`, load the agent and use its `system_prompt`, `model` and
+`config` for the synthesis step, falling back to the current global defaults when no
+agent is set.
+
+---
+
+## 4. Reject unknown query params — Medium
+
+Related to #1, and the reason it went unnoticed. FastAPI ignores query params it does
+not declare, so `?sort_by=title` returns 200 with unsorted data — indistinguishable from
+success. A client cannot detect the difference.
+
+**Requested:** reject unrecognised query params with 422 (e.g. a strict dependency or a
+`model_config = ConfigDict(extra="forbid")` on the query models). Failing loudly turns a
+silent no-op into an obvious error.
+
+---
+
+## 5. Expose `audit_logs` through an API — Medium
 
 `WORKING.md` documents an `audit_logs` table (added in backend M2, BIGINT PK,
 high-volume), but **no endpoint exposes it** — confirmed: no path matching `audit` in
@@ -125,7 +214,7 @@ endpoint (`user_id`, `action`, `entity_type`, `entity_id`, date range), admin-on
 
 ---
 
-## 3. Report export — DOCX / PDF download — Medium
+## 6. Report export — DOCX / PDF download — Medium
 
 Noted as not built in `FRONTEND.md` §9; confirmed no `export` or `download` path exists.
 `JobType` already includes an `export` member, so the groundwork is partly there.
@@ -140,7 +229,7 @@ and reusing the existing job/SSE machinery would fit the current architecture we
 
 ---
 
-## 4. `q` search and date filters on `GET /jobs` — Low
+## 7. `q` search and date filters on `GET /jobs` — Low
 
 `GET /jobs` accepts only `status` and `type` — no free-text search, unlike `/reports`,
 `/documents`, `/users`, `/agents` and `/tools`, which all have `q`.
@@ -150,7 +239,7 @@ and reusing the existing job/SSE machinery would fit the current architecture we
 
 ---
 
-## 5. A dashboard summary endpoint — Low
+## 8. A dashboard summary endpoint — Low
 
 The dashboard needs six counts. With no counts endpoint, the frontend issues **six
 parallel `?size=1` requests** and reads each `total`:
@@ -168,7 +257,7 @@ e.g. totals for reports/jobs/documents/agents plus a job breakdown by status.
 
 ---
 
-## 6. CORS for a deployed frontend — Low
+## 9. CORS for a deployed frontend — Low
 
 Already noted in `FRONTEND.md` §9. `CORS_ORIGINS` currently allows `http://localhost:4200`.
 Any non-dev deployment needs its origin added. **No action needed while developing** —
@@ -176,7 +265,7 @@ the Angular dev server proxies `/api` to `:8000`, so requests are same-origin.
 
 ---
 
-## 7. Leftover test rows — Low (data, not code)
+## 10. Leftover test rows — Low (data, not code)
 
 Not a code change, but visible in the UI:
 

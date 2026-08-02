@@ -1,4 +1,4 @@
-import { HttpClient, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpEvent, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
@@ -33,8 +33,23 @@ export class ApiService {
     return this.get<Page<T>>(path, params);
   }
 
-  post<T>(path: string, body?: unknown): Observable<T> {
-    return this.http.post<T>(this.url(path), body ?? {});
+  /** `headers` is for the odd endpoint that needs one, e.g. Idempotency-Key. */
+  post<T>(path: string, body?: unknown, headers?: Record<string, string>): Observable<T> {
+    return this.http.post<T>(this.url(path), body ?? {}, { headers });
+  }
+
+  /**
+   * Multipart upload that reports progress.
+   *
+   * Returns the raw event stream (`observe: 'events'`) so the caller can drive a
+   * progress bar; the calling service turns it into something friendlier.
+   * Do NOT set a Content-Type — the browser adds the multipart boundary itself.
+   */
+  upload<T>(path: string, form: FormData): Observable<HttpEvent<T>> {
+    return this.http.post<T>(this.url(path), form, {
+      reportProgress: true,
+      observe: 'events',
+    });
   }
 
   patch<T>(path: string, body: unknown): Observable<T> {

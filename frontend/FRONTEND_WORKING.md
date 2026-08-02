@@ -43,13 +43,14 @@ background job and produces a cited report. Three roles — `admin` (governance)
 | 9 | Angular project setup | ✅ done |
 | 10 | Authentication UI — login, registration, JWT handling, route guards | ✅ done |
 | 11 | Dashboard — paginated reports, agent status, recent logs, filter/sort | ✅ done |
-| 12 | *to be confirmed* | next |
-| 13–16 | *to be confirmed* | planned |
+| 12 | Research Job Form — topic, upload, configuration, validation | ✅ done |
+| 13 | *to be confirmed* | next |
+| 14–16 | *to be confirmed* | planned |
 
 *(The user supplies each milestone's definition; do not assume the remaining titles.
-Still unbuilt and expected somewhere in M12–M16: documents upload/ingestion, the
-research run with live SSE job streaming, report detail with citations and versions,
-and the users/agents/tools CRUD screens.)*
+Still unbuilt and expected somewhere in M13–M16: live SSE job progress with the
+step-by-step trace and cancel, report detail with citations and versions, a documents
+management screen, and the users/agents/tools CRUD write screens.)*
 
 ### Workflow convention (per milestone)
 1. **Design first** — propose the approach, confirm decisions.
@@ -60,7 +61,7 @@ and the users/agents/tools CRUD screens.)*
 
 ---
 
-## 4. Current state — what EXISTS right now (after Milestone 11)
+## 4. Current state — what EXISTS right now (after Milestone 12)
 
 ### Folder structure
 
@@ -101,7 +102,9 @@ frontend/
                                # activity-panel (all real)
         users/                 # UsersPage (placeholder), CreateUserPage (real),
                                # users.service.ts
-        reports/ jobs/ agents/ documents/   # placeholder pages + their API services
+        jobs/                  # NewJobPage + document-upload, pipeline-preview,
+                               # jobs.service.ts (JobsPage itself is a placeholder)
+        reports/ agents/ documents/          # placeholder pages + their API services
         tools/ forbidden/ not-found/
 ```
 
@@ -128,6 +131,7 @@ requires a signed-in user (`authGuard` on the parent route).
 | `/login` | `LoginPage` | `guestGuard` | **real** |
 | `/` | → redirects to `/dashboard` | | |
 | `/dashboard` | `DashboardPage` | auth | **real** — full dashboard (M11) |
+| `/jobs/new` | `NewJobPage` | auth + `roleGuard(['admin','analyst'])` | **real** — research form (M12) |
 | `/users/new` | `CreateUserPage` | auth + `roleGuard(['admin'])` | **real** — registration |
 | `/users` | `UsersPage` | auth + `roleGuard(['admin'])` | placeholder |
 | `/documents` `/jobs` `/reports` `/agents` `/tools` | feature pages | auth | placeholder |
@@ -185,6 +189,51 @@ can read reports, jobs and agents, so no role gating applies):
 - **There is no logs endpoint.** An `audit_logs` table exists in the backend but nothing
   exposes it. The jobs feed is the real execution record, so "recent logs" is built from
   `GET /jobs` plus `GET /jobs/{id}/steps`.
+
+### Research job form (Milestone 12)
+
+`/jobs/new`, guarded with `roleGuard(['admin','analyst'])` — both `POST /jobs` and
+`POST /documents` require the backend's `require_job_writer`, so leadership must never
+reach it.
+
+**What the form sends.** Only keys the orchestrator actually reads:
+
+| Field | Sent as | Notes |
+|---|---|---|
+| Topic | `input.query` | required, 10–2000 chars, trimmed |
+| Documents | `input.document_ids` | omitted when nothing is selected = search everything |
+| Retrieval depth | `input.top_k` | 1–20, backend default 5 |
+| Retry budget | `max_attempts` | 1–10, default 3 |
+| Agent | `agent_id` | **stored only, no execution effect** — see below |
+| Advanced | `input.fail_tool`, `input.tool_seconds` | backend test hooks |
+
+**Upload flow.** The endpoint takes **one file per request**, so files upload
+sequentially with a real progress bar (`reportProgress` on the multipart POST). The
+response gives `{document, ingestion_job_id}`; the component then polls
+`GET /documents/{id}` every 1.5 s (capped at ~90 s) until `ingested` or `failed`, and
+auto-selects the document once ingested. Watching the *document* rather than the job
+gives the failure reason directly.
+
+**Client-side file validation matters here.** The parser's real allowlist is
+`.pdf .docx .txt .md .csv .json`; anything else uploads successfully (201) and only
+fails later during ingestion. Checking in the browser turns a delayed, confusing failure
+into an immediate message — and saves the wasted upload.
+
+**Idempotency.** `POST /jobs` carries a generated `Idempotency-Key`, regenerated after
+each success, so a double-click returns the existing job instead of starting a second run.
+
+⚠️ **Two more API limitations, verified by reading the backend source:**
+
+- **The tool pipeline is fixed.** `orchestrator.py` calls `build_pipeline()` with no
+  arguments, and the `tools` table is never consulted at runtime — a tool row's
+  `enabled` flag has no effect on a job. MCP-vs-local is a server setting. So
+  "tool configuration" is a **read-only pipeline preview** plus the knobs that do work
+  (`top_k`, `max_attempts`, document scoping).
+- **`agent_id` has no execution effect.** Nothing in `app/agent/` or `job_runner.py`
+  loads the Agent row; `system_prompt` appears nowhere in the agent package. The picker
+  is labelled accordingly — **delete that label once the backend honours it.**
+
+Both are logged in `../BACKEND_CHANGES_REQUIRED_FOR_FE.md` (items 2 and 3).
 
 ### Models (`core/models/`)
 
@@ -291,6 +340,24 @@ Two demo agents were seeded so the panel is not a single row: *Vendor Analyzer*
 backend test agent (also called "Vendor Analyzer", no model, description `d`) is still
 there, so the list shows two similarly named entries.
 
+**Milestone 12** — 25 automated browser checks against the live backend, all passing,
+including a **real end-to-end research run**:
+
+- Leadership sees no *New research* link and `/jobs/new` sends them to `/forbidden`;
+  analyst gets the form.
+- Pipeline preview renders all five backend tools with MCP/local and optional badges.
+- Validation: empty submit and a 9-character topic are both rejected **without** calling
+  `POST /jobs`; `top_k=99` is marked invalid.
+- An unsupported file type (`.zip`) is rejected in the browser and **never uploaded**.
+- A real `.txt` upload runs POST → poll → `ingested` and is auto-selected.
+- Submit created the job with an `Idempotency-Key` header, and the backend job carried
+  the exact topic, `document_ids` and `top_k=8` that were entered.
+- **The job ran to completion**: `status=succeeded`, all five tools succeeded
+  (`retrieval research synthesis citation compliance`), and it produced a real report —
+  *"Vendor Comparison Report: Vendor A vs. Vendor B"*, 3 sections, 5 citations,
+  `degraded=false` (a genuine LLM report, not the fallback stub).
+- *Refresh status* re-reads the job; *Start another* returns to an empty form.
+
 ---
 
 ## 7. Notes, gotchas & things to know
@@ -331,18 +398,21 @@ there, so the list shows two similarly named entries.
 
 ## 8. Next steps
 
-**Milestone 12 is not yet defined** — the user supplies each milestone. Whatever comes
-next, these are the pieces still missing, with the groundwork already in place:
+**Milestone 13 is not yet defined** — the user supplies each milestone. These are the
+pieces still missing, with the groundwork already in place:
 
-- **Documents & ingestion** — `documents.service.ts` has list/get/chunks; upload
-  (multipart, 25 MB cap) and the ingestion-job watch are not built.
-- **Research run + live streaming** — `jobs.service.ts` has list/get/steps; creating a
-  job and consuming `GET /jobs/{id}/stream` are not built. Use native `EventSource`
-  with `?token=<access_token>`; send an `Idempotency-Key` on `POST /jobs`.
+- **Live job progress** — the natural follow-on from M12. `jobs.service.ts` has
+  list/get/steps and `create()`; still to build: consuming `GET /jobs/{id}/stream` with
+  native `EventSource` and `?token=<access_token>`, the live step trace, and
+  `POST /jobs/{id}/cancel`. `/jobs/new` currently ends at a static confirmation with a
+  *Refresh status* button, which is where streaming plugs in.
 - **Report detail** — `reports.service.ts` has get/versions; the content renderer
   (sections, citations, degraded banner) and version history are not built.
-- **CRUD screens** for users/agents/tools — the services exist but are read-only, and
-  writes must be hidden from roles that cannot perform them (agents/tools writes are
-  admin-only; reports writes are analyst+admin) while all roles keep read access.
+- **Documents screen** — `documents.service.ts` has list/get/chunks/upload; a management
+  screen (list, chunk inspector, delete) is not built.
+- **CRUD write screens** for users/agents/tools — the services are read-only apart from
+  `users.create()`. Writes must be hidden from roles that cannot perform them
+  (agents/tools writes are admin-only; reports writes are analyst+admin) while all roles
+  keep read access.
 
 Reuse `Paginator`, `StatusBadge` and `EmptyState` rather than rebuilding list plumbing.

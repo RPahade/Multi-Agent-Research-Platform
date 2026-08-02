@@ -33,3 +33,30 @@ export function apiErrorMessage(error: unknown): string {
 
   return error.message || `Request failed (${error.status}).`;
 }
+
+/**
+ * Pulls per-field messages out of a 422 so a form can show them inline.
+ *
+ * FastAPI reports the path to the offending value in `loc`, e.g.
+ * `['body', 'input', 'query']` — the last element is the field name.
+ * Returns an empty object for any other error shape.
+ */
+export function apiFieldErrors(error: unknown): Record<string, string> {
+  if (!(error instanceof HttpErrorResponse) || error.status !== 422) {
+    return {};
+  }
+
+  const detail = error.error?.detail;
+  if (!Array.isArray(detail)) {
+    return {};
+  }
+
+  const fields: Record<string, string> = {};
+  for (const item of detail) {
+    const field = Array.isArray(item.loc) ? String(item.loc[item.loc.length - 1]) : '';
+    if (field && !fields[field]) {
+      fields[field] = item.msg;
+    }
+  }
+  return fields;
+}

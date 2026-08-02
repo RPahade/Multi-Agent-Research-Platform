@@ -1,0 +1,207 @@
+@if (created(); as job) {
+  <!-- Confirmation. Live progress and the step trace come in the next milestone. -->
+  <h1>Research job started</h1>
+
+  <div class="card box">
+    <p class="form-success">The job was accepted and is running in the background.</p>
+
+    <dl>
+      <dt>Job</dt>
+      <dd><code>{{ job.id }}</code></dd>
+
+      <dt>Status</dt>
+      <dd>{{ job.status }} · {{ job.progress }}%</dd>
+
+      <dt>Current step</dt>
+      <dd>{{ job.current_step ?? '—' }}</dd>
+
+      @if (job.error) {
+        <dt>Error</dt>
+        <dd class="error-text">{{ job.error }}</dd>
+      }
+    </dl>
+
+    <div class="actions">
+      <button class="btn" type="button" (click)="refreshCreated()">Refresh status</button>
+      <button class="btn btn-primary" type="button" (click)="startAnother()">
+        Start another
+      </button>
+    </div>
+
+    <p class="field-hint">
+      Live progress streaming and the per-tool trace arrive in the next milestone.
+      The dashboard's activity feed already shows this job.
+    </p>
+  </div>
+} @else {
+  <h1>New research job</h1>
+  <p class="muted">
+    Ask a question, choose which documents to search, and the agent will produce a
+    cited report.
+  </p>
+
+  <form class="box" [formGroup]="form" (ngSubmit)="submit()">
+    @if (error()) {
+      <p class="form-error">{{ error() }}</p>
+    }
+
+    <!-- 1. Topic -->
+    <section class="card">
+      <h2>Topic</h2>
+
+      <div class="field">
+        <label for="query">What should the agent research?</label>
+        <textarea
+          id="query"
+          rows="4"
+          formControlName="query"
+          placeholder="e.g. Compare Vendor A and Vendor B on data residency and pricing"
+          [class.invalid]="showError('query')"
+        ></textarea>
+        @if (showError('query')) {
+          <span class="field-error">
+            {{ errorFor('query') ?? 'Enter at least 10 characters describing the topic.' }}
+          </span>
+        } @else {
+          <span class="field-hint">
+            Be specific — this text drives retrieval and the report the model writes.
+          </span>
+        }
+      </div>
+    </section>
+
+    <!-- 2. Sources -->
+    <section class="card">
+      <h2>Sources</h2>
+      <p class="muted">
+        Upload documents to search, or run against everything already ingested.
+      </p>
+
+      <app-document-upload
+        (selectionChange)="onSelectionChange($event)"
+        (busyChange)="onUploadsBusy($event)"
+      />
+    </section>
+
+    <!-- 3. Configuration -->
+    <section class="card">
+      <h2>Configuration</h2>
+
+      <h3>Pipeline</h3>
+      <app-pipeline-preview />
+
+      <div class="grid">
+        <div class="field">
+          <label for="top_k">Retrieval depth (top_k)</label>
+          <input
+            id="top_k"
+            type="number"
+            min="1"
+            max="20"
+            formControlName="top_k"
+            [class.invalid]="showError('top_k')"
+          />
+          @if (showError('top_k')) {
+            <span class="field-error">
+              {{ errorFor('top_k') ?? 'Choose a value between 1 and 20.' }}
+            </span>
+          } @else {
+            <span class="field-hint">
+              How many passages are fed to the model. Too low and it may miss a
+              clause; too high adds noise. Default {{ 5 }}.
+            </span>
+          }
+        </div>
+
+        <div class="field">
+          <label for="max_attempts">Retry budget</label>
+          <input
+            id="max_attempts"
+            type="number"
+            min="1"
+            max="10"
+            formControlName="max_attempts"
+            [class.invalid]="showError('max_attempts')"
+          />
+          @if (showError('max_attempts')) {
+            <span class="field-error">
+              {{ errorFor('max_attempts') ?? 'Choose a value between 1 and 10.' }}
+            </span>
+          } @else {
+            <span class="field-hint">How many times a failed run is retried.</span>
+          }
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="agent_id">Agent</label>
+        <select id="agent_id" formControlName="agent_id">
+          <option value="">None</option>
+          @for (agent of availableAgents(); track agent.id) {
+            <option [value]="agent.id">{{ agent.name }}</option>
+          }
+        </select>
+        <span class="field-hint">
+          Recorded on the job for provenance. The backend does not yet use it to
+          change the prompt or model, so picking one will not alter the result.
+        </span>
+      </div>
+    </section>
+
+    <!-- 4. Advanced / testing -->
+    <section class="card">
+      <button class="advanced-toggle" type="button" (click)="toggleAdvanced()">
+        {{ showAdvanced() ? '▾' : '▸' }} Advanced (testing)
+      </button>
+
+      @if (showAdvanced()) {
+        <p class="muted">
+          Backend test hooks. Use them to exercise failure handling and to make
+          progress visible while a job runs.
+        </p>
+
+        <div class="grid">
+          <div class="field">
+            <label for="fail_tool">Force a tool to fail</label>
+            <select id="fail_tool" formControlName="fail_tool">
+              <option value="">Don't force a failure</option>
+              @for (key of toolKeys; track key) {
+                <option [value]="key">{{ key }}</option>
+              }
+            </select>
+            <span class="field-hint">
+              A required tool's failure fails the job; citation is optional under MCP.
+            </span>
+          </div>
+
+          <div class="field">
+            <label for="tool_seconds">Delay per tool (seconds)</label>
+            <input
+              id="tool_seconds"
+              type="number"
+              min="0"
+              max="10"
+              step="0.1"
+              formControlName="tool_seconds"
+            />
+            <span class="field-hint">Slows each step down so progress is observable.</span>
+          </div>
+        </div>
+      }
+    </section>
+
+    <div class="actions">
+      <button
+        class="btn btn-primary"
+        type="submit"
+        [disabled]="submitting() || uploadsBusy()"
+      >
+        {{ submitting() ? 'Starting…' : 'Start research' }}
+      </button>
+
+      @if (uploadsBusy()) {
+        <span class="muted">Waiting for uploads to finish ingesting…</span>
+      }
+    </div>
+  </form>
+}

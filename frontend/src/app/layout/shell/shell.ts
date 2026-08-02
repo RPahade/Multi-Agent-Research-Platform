@@ -34,6 +34,7 @@ export class Shell {
     { path: '/dashboard', label: 'Dashboard' },
     { path: '/documents', label: 'Documents' },
     { path: '/jobs', label: 'Research Jobs' },
+    { path: '/jobs/new', label: 'New research', roles: ['admin', 'analyst'] },
     { path: '/reports', label: 'Reports' },
     { path: '/users', label: 'Users', roles: ['admin'] },
     { path: '/users/new', label: 'Create user', roles: ['admin'] },

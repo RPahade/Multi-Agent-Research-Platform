@@ -1,0 +1,91 @@
+<div class="uploader">
+  <label class="picker">
+    <input type="file" multiple [accept]="accept" (change)="onFilesPicked($event)" />
+    <span class="btn">Choose files…</span>
+  </label>
+  <span class="field-hint">
+    {{ allowedTypes }} · up to {{ maxBytes / 1024 / 1024 }} MB each
+  </span>
+</div>
+
+@if (uploads().length) {
+  <ul class="uploads">
+    @for (upload of uploads(); track upload.name) {
+      <li>
+        <div class="line">
+          <span class="name">{{ upload.name }}</span>
+          <span class="muted">{{ formatSize(upload.size) }}</span>
+          <app-status-badge [status]="upload.status" />
+        </div>
+
+        @if (upload.status === 'uploading') {
+          <div class="progress"><span class="bar" [style.width.%]="upload.percent"></span></div>
+        }
+        @if (upload.status === 'ingesting') {
+          <span class="muted small">
+            Parsing, chunking and embedding — the document is usable once this finishes.
+          </span>
+        }
+        @if (upload.error) {
+          <span class="field-error">{{ upload.error }}</span>
+        }
+      </li>
+    }
+  </ul>
+}
+
+<div class="picker-head">
+  <h3>Documents to search</h3>
+  <div class="picker-actions">
+    <button class="btn" type="button" (click)="loadDocuments()" [disabled]="loading()">
+      Refresh
+    </button>
+    @if (selected().size) {
+      <button class="btn" type="button" (click)="clearSelection()">Clear</button>
+    }
+  </div>
+</div>
+
+@if (error()) {
+  <p class="form-error">{{ error() }}</p>
+}
+
+@if (loading()) {
+  <p class="muted">Loading documents…</p>
+} @else if (available().length === 0) {
+  <app-empty-state
+    message="No ingested documents yet. Upload one above, or run without documents."
+  />
+} @else {
+  <ul class="documents">
+    @for (document of available(); track document.id) {
+      <li>
+        <label>
+          <input
+            type="checkbox"
+            [checked]="isSelected(document.id)"
+            (change)="onToggle(document.id, $event)"
+          />
+          <span class="doc-name">{{ document.title || document.filename }}</span>
+          <span class="muted small">
+            {{ document.chunk_count }} chunks
+            @if (document.page_count) {
+              · {{ document.page_count }} pages
+            }
+            <!-- Same filename can be uploaded repeatedly, so show when. -->
+            · {{ document.created_at | date: 'short' }}
+          </span>
+        </label>
+      </li>
+    }
+  </ul>
+}
+
+<p class="field-hint">
+  @if (selected().size === 0) {
+    Nothing selected — the agent will search <strong>all</strong> ingested documents.
+  } @else {
+    The agent will search only the {{ selected().size }} selected
+    {{ selected().size === 1 ? 'document' : 'documents' }}.
+  }
+</p>

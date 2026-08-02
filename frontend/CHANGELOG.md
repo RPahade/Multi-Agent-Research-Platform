@@ -7,6 +7,94 @@ Backend history lives in the repo-root `CHANGELOG.md`.
 
 ---
 
+## [Milestone 12 — Research Job Form] — 2026-08-02
+
+**Goal:** A form for creating research jobs — topic input and document upload, tool
+configuration, input validation and error states.
+
+### Decisions (confirmed with user)
+- **Scope ends at job creation.** The form creates the job and shows a confirmation with
+  the job id and current status. Live SSE progress, the step trace and cancel belong to
+  the next milestone.
+- **"Tool configuration" is what the backend actually honours, plus a read-only pipeline
+  preview.** Established by reading the backend source: `orchestrator.py` calls
+  `build_pipeline()` with **no arguments**, and the `tools` table is never consulted at
+  runtime — so a tool row's `enabled` flag has no effect on a job, and MCP-vs-local is a
+  server setting, not a per-job choice. A tool picker would have sent values the backend
+  discards, so the pipeline is shown read-only and the configurable fields are the real
+  ones. Per-job tool selection is logged as backend request #2.
+- **`agent_id` is labelled as having no effect.** Nothing in `app/agent/` or
+  `job_runner.py` reads it, and `system_prompt` appears nowhere in the agent package.
+  The picker says so plainly rather than implying the choice changes the output. Logged
+  as backend request #3.
+- **The backend's test hooks are exposed** behind a collapsed *Advanced (testing)*
+  panel — `fail_tool` and `tool_seconds` — so failure handling and visible progress can
+  be demonstrated from the UI.
+
+### Added
+- **`features/jobs/new-job-page`** — the form, in four sections: Topic, Sources,
+  Configuration and Advanced. Sends `Idempotency-Key` on `POST /jobs` (regenerated after
+  each success) so a double-click cannot start two runs, and builds `input` from only the
+  keys the orchestrator reads. On success it swaps to a confirmation showing the job id,
+  status, progress and current step, with *Refresh status* and *Start another*.
+- **`features/jobs/document-upload`** — upload plus document picker. Files upload one per
+  request (the endpoint accepts a single file) with a real progress bar via
+  `reportProgress`, then the component polls `GET /documents/{id}` every 1.5 s until the
+  document is `ingested` or `failed` and auto-selects it. Validates type, size and
+  emptiness **before** uploading, against the parser's real allowlist
+  (`.pdf .docx .txt .md .csv .json`, 25 MB) — an unsupported type otherwise uploads fine
+  and only fails later during ingestion. Shows the upload date so repeated uploads of the
+  same filename can be told apart.
+- **`features/jobs/pipeline-preview`** — the five backend tools in order, each labelled
+  MCP or local (from `/mcp/status`) and required or optional, with a note that the
+  sequence is fixed. `citation` is shown optional only while MCP serves it, matching
+  `MCPCitationTool.required = False`.
+- **`apiFieldErrors()`** in `core/services/api-error.ts` — pulls per-field messages out
+  of a 422 so they can be mapped back onto the matching form controls.
+- **`ApiService.upload()`** (multipart with progress events) and an optional `headers`
+  argument on `ApiService.post()`.
+- **`DocumentsService.upload()`** returning a friendly `{percent, result}` stream, and
+  **`JobsService.create()`** taking the idempotency key.
+
+### Changed
+- **`app.routes.ts`** — added `/jobs/new` behind `roleGuard(['admin','analyst'])`, since
+  both `POST /jobs` and `POST /documents` require the backend's `require_job_writer`.
+- **`layout/shell`** — added a *New research* link, visible to admin and analyst only.
+- **`layout/shell` (fix)** — the sidebar now stays pinned while the page scrolls
+  (`position: sticky` + `align-self: flex-start` + `height: 100vh`). It was a plain flex
+  child, so it stretched only to the layout's height and scrolled away with the content —
+  obvious once the dashboard grew past one screen. `align-self` is what makes it work:
+  flex items stretch by default, leaving sticky no room to move. The off-canvas drawer
+  below 800px is unaffected.
+- **`BACKEND_CHANGES_REQUIRED_FOR_FE.md`** — added requests #2 (per-job tool selection),
+  #3 (`agent_id` should drive prompt/model) and #4 (reject unknown query params instead
+  of ignoring them), and renumbered the rest.
+
+### Verified
+25 automated browser checks against the live backend, all passing — including a **real
+end-to-end research run**:
+- leadership sees no *New research* link and `/jobs/new` redirects to `/forbidden`
+- pipeline preview renders all five tools with MCP/local and optional badges
+- empty submit and a 9-character topic are rejected **without** calling `POST /jobs`;
+  `top_k=99` is marked invalid
+- an unsupported `.zip` is rejected in the browser and **never uploaded**
+- a real `.txt` upload runs POST → poll → `ingested` and is auto-selected
+- `POST /jobs` carried an `Idempotency-Key`, and the stored job input matched exactly
+  what was entered (topic, `document_ids`, `top_k=8`)
+- the job **ran to completion**: `succeeded`, all five tools succeeded, producing
+  *"Vendor Comparison Report: Vendor A vs. Vendor B"* — 3 sections, 5 citations,
+  `degraded=false`, i.e. a genuine LLM report rather than the fallback stub
+- *Refresh status* re-reads the job; *Start another* returns to an empty form
+
+Production build clean, no warnings: initial 312.99 kB (90.89 kB transfer).
+`npm test` passes.
+
+### Not done yet (by design)
+No live SSE streaming, no per-tool live trace and no cancel — the confirmation is static
+with a manual refresh. No report detail view.
+
+---
+
 ## [Milestone 11 — Dashboard] — 2026-08-02
 
 **Goal:** A dashboard showing a paginated list of reports, agent status and recent logs,

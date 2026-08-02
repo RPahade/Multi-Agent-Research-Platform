@@ -45,6 +45,15 @@ export const routes: Routes = [
           import('./features/jobs/jobs-page').then((m) => m.JobsPage),
       },
       {
+        // Creating a job and uploading documents both require analyst or admin
+        // (the backend's require_job_writer), so leadership must not get here.
+        path: 'jobs/new',
+        title: 'New research job',
+        canActivate: [roleGuard(['admin', 'analyst'])],
+        loadComponent: () =>
+          import('./features/jobs/new-job-page').then((m) => m.NewJobPage),
+      },
+      {
         path: 'reports',
         title: 'Reports',
         loadComponent: () =>

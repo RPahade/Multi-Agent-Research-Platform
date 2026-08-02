@@ -10,6 +10,17 @@
   flex-shrink: 0;
   background: var(--color-sidebar);
   padding: var(--space-4) var(--space-3);
+
+  /* Stay put while the page scrolls.
+     `align-self: flex-start` is the important part: flex items stretch to the
+     container's full height by default, which would leave sticky no room to
+     move. Pinning the height to the viewport and scrolling any overflow inside
+     keeps the nav reachable even on a short window. */
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
+  height: 100vh;
+  overflow-y: auto;
 }
 
 .brand {
