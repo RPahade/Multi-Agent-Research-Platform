@@ -5,6 +5,10 @@
 >
 > The backend contract is `../FRONTEND.md`; the authoritative API spec is always the
 > live `http://localhost:8000/openapi.json`.
+>
+> Backend work the frontend needs is tracked in
+> [`../BACKEND_CHANGES_REQUIRED_FOR_FE.md`](../BACKEND_CHANGES_REQUIRED_FOR_FE.md) —
+> append to it rather than burying requests in this file.
 
 ---
 
@@ -38,14 +42,14 @@ background job and produces a cited report. Three roles — `admin` (governance)
 |---|---|---|
 | 9 | Angular project setup | ✅ done |
 | 10 | Authentication UI — login, registration, JWT handling, route guards | ✅ done |
-| 11 | Admin CRUD — users, agents, tools | next |
-| 12 | Documents & ingestion | planned |
-| 13 | Research run + live job streaming | planned |
-| 14 | Reports (content, citations, versions) | planned |
-| 15 | Dashboards | planned |
-| 16 | Polish / final | planned |
+| 11 | Dashboard — paginated reports, agent status, recent logs, filter/sort | ✅ done |
+| 12 | *to be confirmed* | next |
+| 13–16 | *to be confirmed* | planned |
 
-*(M11–M16 titles are the proposal; confirm each one before building it.)*
+*(The user supplies each milestone's definition; do not assume the remaining titles.
+Still unbuilt and expected somewhere in M12–M16: documents upload/ingestion, the
+research run with live SSE job streaming, report detail with citations and versions,
+and the users/agents/tools CRUD screens.)*
 
 ### Workflow convention (per milestone)
 1. **Design first** — propose the approach, confirm decisions.
@@ -56,7 +60,7 @@ background job and produces a cited report. Three roles — `admin` (governance)
 
 ---
 
-## 4. Current state — what EXISTS right now (after Milestone 10)
+## 4. Current state — what EXISTS right now (after Milestone 11)
 
 ### Folder structure
 
@@ -80,6 +84,7 @@ frontend/
           api-error.ts         # apiErrorMessage() — normalises {detail} and 422 arrays
           token-storage.ts     # access token in memory, refresh token in localStorage
           auth.service.ts      # login/logout/refresh/me + user, role, isAuthenticated
+          system.service.ts    # /health, /health/db, /mcp/status, /events/status
         interceptors/
           auth-interceptor.ts  # attaches Bearer; 401 -> refresh once -> retry
         guards/
@@ -87,13 +92,28 @@ frontend/
       layout/shell/            # role-aware sidebar + topbar (user, role, sign out)
       shared/components/
         placeholder/           # <app-placeholder> used by the not-yet-built screens
+        paginator/             # pager driven by Page<T>; emits page/size changes
+        status-badge/          # colours every status value the API returns
+        empty-state/           # "nothing to show" message
       features/                # one folder per screen area
         auth/                  # LoginPage (real)
+        dashboard/             # DashboardPage + reports-panel, agents-panel,
+                               # activity-panel (all real)
         users/                 # UsersPage (placeholder), CreateUserPage (real),
                                # users.service.ts
-        dashboard/ agents/ tools/ documents/ jobs/ reports/
-        forbidden/ not-found/
+        reports/ jobs/ agents/ documents/   # placeholder pages + their API services
+        tools/ forbidden/ not-found/
 ```
+
+**Where API calls live:** one service per entity in its feature folder
+(`reports.service.ts`, `jobs.service.ts`, `agents.service.ts`,
+`documents.service.ts`, `users.service.ts`), each wrapping `ApiService`. Cross-cutting
+status endpoints live in `core/services/system.service.ts`.
+
+**Note on query params:** each service lists the endpoint's supported params
+explicitly rather than spreading a query object. That keeps the call type-safe (a
+TypeScript interface is not assignable to `Record<string, …>`) and documents exactly
+which filters the endpoint honours.
 
 **Convention:** `core/` = loaded once (services, models, guards, interceptors).
 `shared/` = reusable dumb UI. `features/` = screens; each milestone fills in its folder.
@@ -107,7 +127,7 @@ requires a signed-in user (`authGuard` on the parent route).
 |---|---|---|---|
 | `/login` | `LoginPage` | `guestGuard` | **real** |
 | `/` | → redirects to `/dashboard` | | |
-| `/dashboard` | `DashboardPage` | auth | **real** — live backend health card |
+| `/dashboard` | `DashboardPage` | auth | **real** — full dashboard (M11) |
 | `/users/new` | `CreateUserPage` | auth + `roleGuard(['admin'])` | **real** — registration |
 | `/users` | `UsersPage` | auth + `roleGuard(['admin'])` | placeholder |
 | `/documents` `/jobs` `/reports` `/agents` `/tools` | feature pages | auth | placeholder |
@@ -139,6 +159,32 @@ section, so only user management is restricted at the route level. Write permiss
 - **Registration** is an admin-gated *Create user* screen (`/users/new` → `POST /users`).
   The backend has no public sign-up endpoint — confirmed against the live spec — so
   self-service registration is not possible without a backend change.
+
+### Dashboard (Milestone 11)
+
+`/dashboard` is composed of four parts, read-only and open to all three roles (everyone
+can read reports, jobs and agents, so no role gating applies):
+
+1. **Stat tiles** — reports, jobs (with running/failed counts), documents, active
+   agents. Each count is the `total` of a `?size=1` page, the cheapest way to ask
+   "how many?" with the endpoints available.
+2. **Status strip** — API, database and Kafka event pipeline.
+3. **Reports panel** — paginated table with a server-side status filter and a debounced
+   `q` search (300 ms), plus client-side column sorting.
+4. **Agent status** (agents + the MCP tool server) and **Recent activity** (the jobs
+   feed, each row expandable to its per-tool trace, loaded lazily and cached per job).
+
+⚠️ **Two API limitations shape this screen — verified against the live backend:**
+
+- **There is no sorting.** `?sort=`, `?order=` and `?sort_by=` are silently ignored
+  (FastAPI drops unknown query params), so results are byte-identical with or without
+  them. Ordering is always `created_at DESC`. Column sorting is therefore **client-side
+  over the loaded page only**, and the UI says so beneath the table. `ReportsService`
+  is ready to pass sort params the moment the backend supports them — raise that in the
+  backend chat if server-side sorting is wanted.
+- **There is no logs endpoint.** An `audit_logs` table exists in the backend but nothing
+  exposes it. The jobs feed is the real execution record, so "recent logs" is built from
+  `GET /jobs` plus `GET /jobs/{id}/steps`.
 
 ### Models (`core/models/`)
 
@@ -217,6 +263,34 @@ this project):
 Test accounts created for role testing (left in place per the "keep test data" rule):
 `analyst@example.com` and `leadership@example.com`, both `ChangeMe123!`.
 
+**Milestone 11** — 21 automated browser checks against the live backend, all passing:
+
+- Stat tiles match the API exactly (20 reports, 45 jobs, 2 documents, 2 active agents).
+- Status strip shows API `ok` v0.1.0, database `reachable`, Kafka `agent.job.events`.
+- Reports table renders one page (10 rows) and the paginator reports the true total.
+- The status filter goes to the API as a query param
+  (`/reports?page=1&size=10&status=draft`) and the empty result matches the API's count.
+- Typing in the search box issues **exactly one** debounced request (`q=vendor`).
+- Next moves to page 2 ("Showing 11–20 of 20"); changing page size to 50 reloads and
+  shows all 20 rows.
+- Clicking *Title* sorts ascending, clicking again reverses, and the caveat note is
+  rendered.
+- Agent panel shows active/inactive agents and the three MCP tools (`web_research`,
+  `verify_citations`, `redact_pii`).
+- Activity feed lists jobs; expanding one calls `/jobs/{id}/steps` and renders the trace.
+- The activity type filter reaches the API (`/jobs?page=1&size=8&type=ingestion`).
+- Leadership can read the whole dashboard.
+
+Server-side search confirmed separately by API: `q=''`→20, `vendor`→17, `residency`→3,
+`zzzznotfound`→0. (The in-browser "search narrows results" assertion was weak — it
+compared a 10-row page against a 20-row total, which paging alone satisfies. The API
+check above is the real evidence.)
+
+Two demo agents were seeded so the panel is not a single row: *Vendor Analyzer*
+(active, `gemini-flash-latest`) and *Compliance Reviewer* (inactive). A pre-existing
+backend test agent (also called "Vendor Analyzer", no model, description `d`) is still
+there, so the list shows two similarly named entries.
+
 ---
 
 ## 7. Notes, gotchas & things to know
@@ -250,13 +324,25 @@ Test accounts created for role testing (left in place per the "keep test data" r
   "`frontend/` later"). Left deliberately untouched — they are the backend chat's files.
   The frontend docs are self-sufficient; do not trust the root ones for frontend state.
 
+- **The API has no sorting and no logs endpoint** — see the Dashboard section above.
+  Don't send `sort_by`/`order` expecting them to work; they are silently ignored.
+
 ---
 
 ## 8. Next steps
 
-**Milestone 11 — Admin CRUD (users, agents, tools):** a reusable paginated/filterable
-table component plus a reactive-form modal pattern, then the three admin entities built
-on top of it. `UsersPage` is still a placeholder and `users.service.ts` currently has
-only `create()` — extend it with list/get/update/delete. Write actions must be hidden
-for roles that cannot perform them (agents/tools writes are admin-only; reports writes
-are analyst+admin), while all three roles keep read access.
+**Milestone 12 is not yet defined** — the user supplies each milestone. Whatever comes
+next, these are the pieces still missing, with the groundwork already in place:
+
+- **Documents & ingestion** — `documents.service.ts` has list/get/chunks; upload
+  (multipart, 25 MB cap) and the ingestion-job watch are not built.
+- **Research run + live streaming** — `jobs.service.ts` has list/get/steps; creating a
+  job and consuming `GET /jobs/{id}/stream` are not built. Use native `EventSource`
+  with `?token=<access_token>`; send an `Idempotency-Key` on `POST /jobs`.
+- **Report detail** — `reports.service.ts` has get/versions; the content renderer
+  (sections, citations, degraded banner) and version history are not built.
+- **CRUD screens** for users/agents/tools — the services exist but are read-only, and
+  writes must be hidden from roles that cannot perform them (agents/tools writes are
+  admin-only; reports writes are analyst+admin) while all roles keep read access.
+
+Reuse `Paginator`, `StatusBadge` and `EmptyState` rather than rebuilding list plumbing.

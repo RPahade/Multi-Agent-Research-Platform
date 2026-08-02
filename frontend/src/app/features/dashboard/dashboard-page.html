@@ -1,39 +1,60 @@
 <h1>Dashboard</h1>
-<p class="muted">
-  Multi-Agent Research Intelligence Platform. The full dashboard is built in a
-  later milestone — for now this page confirms the frontend can reach the API.
-</p>
+<p class="muted">Reports, agent status and recent activity across the platform.</p>
 
-<div class="card connection">
-  <div class="row">
-    <h2>Backend connection</h2>
-    <button class="btn" type="button" (click)="checkBackend()" [disabled]="loading()">
-      Re-check
-    </button>
-  </div>
-
-  @if (loading()) {
-    <p class="muted">Checking…</p>
-  } @else if (error()) {
-    <p><span class="badge badge-danger">Unreachable</span></p>
-    <p class="muted">{{ error() }}</p>
-    <p class="muted">
-      <small>Start it with <code>docker compose up -d</code> in the repo root.</small>
-    </p>
-  } @else if (health(); as info) {
-    <p><span class="badge badge-success">Connected</span></p>
-    <dl>
-      <dt>API</dt>
-      <dd>{{ info.app }}</dd>
-
-      <dt>Version</dt>
-      <dd>{{ info.version }}</dd>
-
-      <dt>Environment</dt>
-      <dd>{{ info.env }}</dd>
-
-      <dt>Database</dt>
-      <dd>{{ dbHealth()?.database ?? 'unknown' }}</dd>
-    </dl>
+<div class="tiles">
+  @if (tilesLoading()) {
+    <div class="card tile"><span class="muted">Loading…</span></div>
+  } @else {
+    @for (tile of tiles(); track tile.label) {
+      <div class="card tile">
+        <span class="value">{{ tile.value }}</span>
+        <span class="label">{{ tile.label }}</span>
+        @if (tile.hint) {
+          <span class="muted hint">{{ tile.hint }}</span>
+        }
+      </div>
+    }
   }
+</div>
+
+<div class="card status-strip">
+  <span class="item">
+    <span class="muted">API</span>
+    @if (health(); as info) {
+      <span class="badge badge-success">{{ info.status }}</span>
+      <span class="muted">v{{ info.version }} · {{ info.env }}</span>
+    } @else {
+      <span class="badge badge-danger">unreachable</span>
+    }
+  </span>
+
+  <span class="item">
+    <span class="muted">Database</span>
+    @if (dbHealth(); as db) {
+      <span class="badge badge-success">{{ db.database }}</span>
+    } @else {
+      <span class="badge badge-danger">unreachable</span>
+    }
+  </span>
+
+  <span class="item">
+    <span class="muted">Events</span>
+    @if (events(); as bus) {
+      @if (bus.kafka_enabled) {
+        <span class="badge badge-success">kafka</span>
+        <span class="muted">{{ bus.topic }}</span>
+      } @else {
+        <span class="badge">disabled</span>
+      }
+    } @else {
+      <span class="badge badge-danger">unavailable</span>
+    }
+  </span>
+</div>
+
+<app-reports-panel />
+
+<div class="columns">
+  <app-agents-panel />
+  <app-activity-panel />
 </div>

@@ -1,0 +1,94 @@
+<section class="card">
+  <div class="head">
+    <h2>Reports</h2>
+
+    <div class="filters">
+      <input
+        type="search"
+        placeholder="Search reports…"
+        [formControl]="qControl"
+        aria-label="Search reports"
+      />
+      <select [formControl]="statusControl" aria-label="Filter by status">
+        <option value="">All statuses</option>
+        @for (status of statuses; track status) {
+          <option [value]="status">{{ status }}</option>
+        }
+      </select>
+    </div>
+  </div>
+
+  @if (error()) {
+    <p class="form-error">{{ error() }}</p>
+  }
+
+  @if (loading()) {
+    <p class="muted">Loading…</p>
+  } @else if (sortedItems().length === 0) {
+    <app-empty-state message="No reports match these filters." />
+  } @else {
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th class="sortable" (click)="sortBy('title')">
+              Title{{ sortIndicator('title') }}
+            </th>
+            <th class="sortable" (click)="sortBy('status')">
+              Status{{ sortIndicator('status') }}
+            </th>
+            <th class="sortable num" (click)="sortBy('version')">
+              Version{{ sortIndicator('version') }}
+            </th>
+            <th class="sortable" (click)="sortBy('created_at')">
+              Created{{ sortIndicator('created_at') }}
+            </th>
+            <th>Job</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (report of sortedItems(); track report.id) {
+            <tr>
+              <td>
+                <span class="title">{{ report.title }}</span>
+                @if (report.summary) {
+                  <span class="muted summary">{{ report.summary }}</span>
+                }
+                @if (report.content.degraded) {
+                  <span class="badge badge-warning">degraded</span>
+                }
+              </td>
+              <td><app-status-badge [status]="report.status" /></td>
+              <td class="num">{{ report.version }}</td>
+              <td>{{ report.created_at | date: 'short' }}</td>
+              <td>
+                @if (report.job_id) {
+                  <code>{{ report.job_id.slice(0, 8) }}</code>
+                } @else {
+                  <span class="muted">—</span>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <p class="muted sort-note">
+      <small>
+        Filters and paging are applied by the API. Sorting reorders the rows on
+        this page only — the API has no sort parameter and always returns
+        newest first.
+      </small>
+    </p>
+  }
+
+  <app-paginator
+    [page]="page()"
+    [size]="size()"
+    [total]="total()"
+    [pages]="pages()"
+    (pageChange)="onPage($event)"
+    (sizeChange)="onSize($event)"
+  />
+</section>

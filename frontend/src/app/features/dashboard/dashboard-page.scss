@@ -1,28 +1,58 @@
-.connection {
-  max-width: 520px;
-  margin-top: var(--space-5);
-}
-
-.row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-4);
-}
-
-dl {
+.tiles {
   display: grid;
-  grid-template-columns: 130px 1fr;
-  gap: var(--space-2) var(--space-4);
-  margin: var(--space-4) 0 0;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-4);
+  margin: var(--space-5) 0 var(--space-4);
 }
 
-dt {
-  color: var(--color-text-muted);
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-4);
+}
+
+.tile .value {
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.1;
+}
+
+.tile .label {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.tile .hint {
+  font-size: 13px;
+}
+
+.status-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-5);
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-4);
   font-size: 14px;
 }
 
-dd {
-  margin: 0;
-  font-weight: 500;
+.status-strip .item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* The reports panel is full width; these two share a row on wide screens. */
+.columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+  align-items: start;
+}
+
+@media (max-width: 1000px) {
+  .columns {
+    grid-template-columns: 1fr;
+  }
 }

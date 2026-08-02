@@ -7,6 +7,84 @@ Backend history lives in the repo-root `CHANGELOG.md`.
 
 ---
 
+## [Milestone 11 — Dashboard] — 2026-08-02
+
+**Goal:** A dashboard showing a paginated list of reports, agent status and recent logs,
+with filtering and sorting.
+
+### Decisions (confirmed with user)
+- **Sorting is client-side, over the loaded page, and labelled as such.** Verified
+  against the live backend that sorting does not exist: `?sort=created_at&order=asc` and
+  `?sort_by=title` return byte-identical results, because FastAPI silently drops unknown
+  query params. The spec confirms `GET /reports` accepts only `status, job_id, q, page,
+  size`. The services are written to pass sort params the moment the backend adds them.
+- **"Recent logs" is the jobs feed.** There is no logs endpoint — an `audit_logs` table
+  exists in the backend but nothing exposes it — and every unit of work runs as a job,
+  so `GET /jobs` plus the per-tool trace from `GET /jobs/{id}/steps` is the real
+  execution record.
+
+### Added
+- **Shared components**, built to be reused by every later list screen:
+  - `shared/components/paginator` — driven by the `Page<T>` fields the API returns;
+    emits page and page-size changes and shows "Showing X–Y of N".
+  - `shared/components/status-badge` — one colour map covering every status value the
+    API can return across jobs, job steps, documents, reports and agents.
+  - `shared/components/empty-state` — placeholder when a list has no rows.
+- **API services**, one per entity in its feature folder, each wrapping `ApiService`:
+  `reports.service.ts` (list/get/versions), `jobs.service.ts` (list/get/steps),
+  `agents.service.ts` (list/get), `documents.service.ts` (list/get/chunks). Params are
+  listed explicitly per endpoint rather than spread from a query object — type-safe, and
+  it documents which filters each endpoint actually honours.
+- **`core/services/system.service.ts`** — `/health`, `/health/db`, `/mcp/status`,
+  `/events/status`.
+- **`features/dashboard/reports-panel`** — paginated reports table with a server-side
+  status filter, a 300 ms debounced `q` search, page-size control, and click-to-sort
+  column headers (title, status, version, created) with a visible note that sorting
+  applies to the current page only. Flags reports whose content is `degraded`.
+- **`features/dashboard/agents-panel`** — agents with active/inactive badges, model and
+  version, plus the MCP tool server status and the tools it serves (an agent is only as
+  available as its toolbox).
+- **`features/dashboard/activity-panel`** — recent jobs with status, progress bar,
+  current step, retry attempts and errors, filterable by type and status. Each row
+  expands to that job's per-tool trace, fetched lazily and cached per job.
+- **Table and neutral-badge styles** in `styles.scss` (`.table-scroll` so wide tables
+  scroll themselves rather than the page, `th.sortable`, `.badge-neutral`).
+
+### Changed
+- **`features/dashboard/dashboard-page`** — replaced the M9 health-check placeholder
+  with the real dashboard: stat tiles (reports, jobs with running/failed, documents,
+  active agents — each read from the `total` of a `?size=1` page), a system status
+  strip, and the three panels. Read-only and open to all three roles.
+
+### Verified
+21 automated browser checks against the live backend, all passing:
+- stat tiles match the API exactly (20 reports, 45 jobs, 2 documents, 2 active agents)
+- status strip shows API `ok`, database `reachable`, Kafka `agent.job.events`
+- table renders one page of 10; paginator shows the true total; Next reaches
+  "Showing 11–20 of 20"; page size 50 loads all 20 rows
+- status filter reaches the API as `/reports?page=1&size=10&status=draft`, and the
+  empty result matches the API's own count of 0 drafts
+- typing in search issues **exactly one** debounced request
+- Title sorts ascending, clicking again reverses, and the caveat note renders
+- agent panel shows active/inactive agents and the 3 MCP tools
+- expanding a job calls `/jobs/{id}/steps` and renders the trace
+- activity type filter reaches the API
+- leadership can read the whole dashboard
+
+Server-side search confirmed separately against the API (`q=''`→20, `vendor`→17,
+`residency`→3, `zzzznotfound`→0), because the in-browser assertion for it was weak —
+it compared a 10-row page against a 20-row total, which paging alone satisfies.
+
+Production build clean, no warnings: initial 312.25 kB (90.47 kB transfer).
+Two demo agents seeded and kept: *Vendor Analyzer* (active) and *Compliance Reviewer*
+(inactive).
+
+### Not done yet (by design)
+No report detail view, no document upload, no job creation or live SSE streaming, and no
+CRUD write screens — the services added here are read-only.
+
+---
+
 ## [Milestone 10 — Authentication UI] — 2026-07-26
 
 **Goal:** Login and registration screens, secure JWT handling, and route guards for

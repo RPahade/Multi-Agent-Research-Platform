@@ -1,0 +1,64 @@
+<section class="card">
+  <div class="head">
+    <h2>Agent status</h2>
+    <button class="btn" type="button" (click)="load()" [disabled]="loading()">
+      Refresh
+    </button>
+  </div>
+
+  @if (error()) {
+    <p class="form-error">{{ error() }}</p>
+  }
+
+  @if (loading()) {
+    <p class="muted">Loading…</p>
+  } @else if (items().length === 0) {
+    <app-empty-state message="No agents are configured yet." />
+  } @else {
+    <ul class="agents">
+      @for (agent of items(); track agent.id) {
+        <li>
+          <div class="line">
+            <span class="name">{{ agent.name }}</span>
+            <app-status-badge [status]="agent.is_active ? 'active' : 'inactive'" />
+          </div>
+          <div class="meta muted">
+            {{ agent.model ?? 'no model set' }} · version {{ agent.version }}
+          </div>
+          @if (agent.description) {
+            <div class="meta muted">{{ agent.description }}</div>
+          }
+        </li>
+      }
+    </ul>
+  }
+
+  <div class="mcp">
+    <h3>Tool server (MCP)</h3>
+    @if (mcp(); as status) {
+      <div class="line">
+        <app-status-badge
+          [status]="status.enabled && status.reachable ? 'active' : 'inactive'"
+        />
+        <span class="muted">
+          @if (!status.enabled) {
+            disabled in the backend configuration
+          } @else if (status.reachable) {
+            {{ status.tools.length }} tools available
+          } @else {
+            configured but unreachable
+          }
+        </span>
+      </div>
+      @if (status.tools.length) {
+        <div class="tools">
+          @for (tool of status.tools; track tool) {
+            <code>{{ tool }}</code>
+          }
+        </div>
+      }
+    } @else {
+      <p class="muted">Tool server status unavailable.</p>
+    }
+  </div>
+</section>
