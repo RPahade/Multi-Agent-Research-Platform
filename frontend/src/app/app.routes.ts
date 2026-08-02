@@ -1,24 +1,29 @@
 import { Routes } from '@angular/router';
 
+import { authGuard, guestGuard, roleGuard } from './core/guards/auth-guard';
 import { Shell } from './layout/shell/shell';
 
 /**
  * Every page is loaded lazily (loadComponent), so a route's code is only
  * downloaded when it is first visited.
  *
- * Two groups: /login stands alone, everything else renders inside the Shell.
- * Route guards are added in the authentication milestone.
+ * Two groups: /login stands alone, everything else renders inside the Shell and
+ * requires a signed-in user. All three roles may READ every section, so only
+ * user management is role-restricted here; write permissions are enforced
+ * inside each screen (and by the backend, which always answers 403 itself).
  */
 export const routes: Routes = [
   {
     path: 'login',
     title: 'Sign in',
+    canActivate: [guestGuard],
     loadComponent: () =>
       import('./features/auth/login-page').then((m) => m.LoginPage),
   },
   {
     path: '',
     component: Shell,
+    canActivate: [authGuard],
     children: [
       { path: '', pathMatch: 'full', redirectTo: 'dashboard' },
       {
@@ -48,8 +53,17 @@ export const routes: Routes = [
       {
         path: 'users',
         title: 'Users',
+        canActivate: [roleGuard(['admin'])],
         loadComponent: () =>
           import('./features/users/users-page').then((m) => m.UsersPage),
+      },
+      {
+        // Registration: admin-only, because the backend has no public sign-up.
+        path: 'users/new',
+        title: 'Create user',
+        canActivate: [roleGuard(['admin'])],
+        loadComponent: () =>
+          import('./features/users/create-user-page').then((m) => m.CreateUserPage),
       },
       {
         path: 'agents',
@@ -62,6 +76,12 @@ export const routes: Routes = [
         title: 'Tools',
         loadComponent: () =>
           import('./features/tools/tools-page').then((m) => m.ToolsPage),
+      },
+      {
+        path: 'forbidden',
+        title: 'Not allowed',
+        loadComponent: () =>
+          import('./features/forbidden/forbidden-page').then((m) => m.ForbiddenPage),
       },
     ],
   },

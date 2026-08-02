@@ -6,10 +6,11 @@
     </div>
 
     <nav>
-      @for (link of links; track link.path) {
+      @for (link of links(); track link.path) {
         <a
           [routerLink]="link.path"
           routerLinkActive="active"
+          [routerLinkActiveOptions]="{ exact: true }"
           (click)="closeMenu()"
         >
           {{ link.label }}
@@ -22,8 +23,16 @@
     <header class="topbar">
       <button class="menu-btn" type="button" (click)="toggleMenu()">☰</button>
       <span class="spacer"></span>
-      <!-- Milestone 10 replaces this with the signed-in user + sign out. -->
-      <span class="muted">Not signed in</span>
+
+      @if (auth.user(); as user) {
+        <span class="who">
+          <span class="name">{{ user.full_name || user.email }}</span>
+          <span class="badge">{{ user.role }}</span>
+        </span>
+        <button class="btn" type="button" (click)="signOut()" [disabled]="signingOut()">
+          {{ signingOut() ? 'Signing out…' : 'Sign out' }}
+        </button>
+      }
     </header>
 
     <main class="content">

@@ -1,0 +1,45 @@
+.wrap {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  padding: var(--space-4);
+}
+
+.box {
+  width: 100%;
+  max-width: 380px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+}
+
+.brand-mark {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  background: var(--color-primary);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.brand-text {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.full {
+  width: 100%;
+  justify-content: center;
+}
+
+.note {
+  margin: var(--space-4) 0 0;
+  text-align: center;
+}

@@ -1,17 +1,17 @@
-import { Component, signal } from '@angular/core';
-import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { Component, computed, inject, signal } from '@angular/core';
+import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+
+import { UserRole } from '../../core/models';
+import { AuthService } from '../../core/services/auth.service';
 
 interface NavLink {
   path: string;
   label: string;
+  /** Roles allowed to see the link. Omitted = every signed-in role. */
+  roles?: UserRole[];
 }
 
-/**
- * The application frame: sidebar + top bar + the routed page.
- *
- * Every link is visible for now. Milestone 10 adds authentication and hides
- * links the signed-in role is not allowed to use.
- */
+/** Sidebar + top bar + the routed page. */
 @Component({
   selector: 'app-shell',
   imports: [RouterOutlet, RouterLink, RouterLinkActive],
@@ -19,18 +19,33 @@ interface NavLink {
   styleUrl: './shell.scss',
 })
 export class Shell {
+  protected readonly auth = inject(AuthService);
+  private readonly router = inject(Router);
+
   /** Sidebar visibility on narrow screens. */
   readonly menuOpen = signal(false);
+  readonly signingOut = signal(false);
 
-  readonly links: NavLink[] = [
+  /**
+   * All three roles can read every section, so only user management is
+   * restricted. Write actions are hidden inside each screen, not here.
+   */
+  private readonly allLinks: NavLink[] = [
     { path: '/dashboard', label: 'Dashboard' },
     { path: '/documents', label: 'Documents' },
     { path: '/jobs', label: 'Research Jobs' },
     { path: '/reports', label: 'Reports' },
-    { path: '/users', label: 'Users' },
+    { path: '/users', label: 'Users', roles: ['admin'] },
+    { path: '/users/new', label: 'Create user', roles: ['admin'] },
     { path: '/agents', label: 'Agents' },
     { path: '/tools', label: 'Tools' },
   ];
+
+  /** Only the links the signed-in role is allowed to see. */
+  readonly links = computed(() => {
+    const role = this.auth.role();
+    return this.allLinks.filter((link) => !link.roles || (role && link.roles.includes(role)));
+  });
 
   toggleMenu(): void {
     this.menuOpen.update((open) => !open);
@@ -38,5 +53,13 @@ export class Shell {
 
   closeMenu(): void {
     this.menuOpen.set(false);
+  }
+
+  signOut(): void {
+    this.signingOut.set(true);
+    this.auth.logout().subscribe({
+      next: () => this.router.navigate(['/login']),
+      error: () => this.router.navigate(['/login']),
+    });
   }
 }

@@ -7,6 +7,83 @@ Backend history lives in the repo-root `CHANGELOG.md`.
 
 ---
 
+## [Milestone 10 — Authentication UI] — 2026-07-26
+
+**Goal:** Login and registration screens, secure JWT handling, and route guards for
+role-based access.
+
+### Decisions (confirmed with user)
+- **Registration is an admin-gated "Create user" screen.** The backend has no public
+  sign-up endpoint — verified against the live spec: there is no `/auth/register`, and
+  `POST /users` answers 401 when anonymous because it is admin-only. Rather than add a
+  backend endpoint, registration is an administrator creating the account, which also
+  suits a tool whose roles are admin / analyst / leadership (nobody should be able to
+  self-assign a role).
+- **Root `README.md` / `WORKING.md` left stale on purpose** — they are the backend
+  chat's files. The frontend docs stand on their own instead.
+
+### Added
+- **`core/services/token-storage.ts`** — access token in a memory-only signal, refresh
+  token in `localStorage` (`mar.refresh_token`). Deliberately has no `HttpClient`
+  dependency so the interceptor can read the token without a circular dependency.
+- **`core/services/auth.service.ts`** — `login` (form-encoded via an `HttpParams` body,
+  email in `username`), `loadCurrentUser`, `refresh`, `logout` (revokes server-side),
+  `clearSession`, `restoreSession`; exposes `user` / `isAuthenticated` / `role` signals.
+  `refresh()` is **single-flight**: simultaneous 401s share one request, because token
+  rotation would invalidate parallel attempts.
+- **`core/interceptors/auth-interceptor.ts`** — attaches the Bearer token; skips
+  `/auth/login` and `/auth/refresh` (but not `/auth/logout`, which needs a valid access
+  token); on 401 refreshes once and retries the original request; on refresh failure
+  clears the session and routes to `/login?returnUrl=…`. A 403 is passed through
+  untouched, since "not allowed" is not fixable by refreshing.
+- **`core/guards/auth-guard.ts`** — `authGuard` (with `returnUrl`), `roleGuard(roles)`,
+  and `guestGuard` keeping signed-in users off the login screen.
+- **`features/auth/login-page`** — real reactive-form sign-in with per-field validation,
+  a whole-form error banner and a loading state.
+- **`features/users/create-user-page`** + **`users.service.ts`** — the registration
+  screen: email, optional full name, password (8–72 chars, matching the backend's bcrypt
+  limit) and role, posting to `POST /users`.
+- **`features/forbidden/forbidden-page`** — 403 screen naming the user's current role.
+- **Form styles** in `styles.scss`: `.field`, `.field-error`, `.field-hint`,
+  `.form-error`, `.form-success`, plus invalid-state styling.
+
+### Changed
+- **`app.config.ts`** — registers `authInterceptor` via
+  `provideHttpClient(withInterceptors(...))` and adds `provideAppInitializer` calling
+  `restoreSession()`, so a reload restores the session *before* the app renders (the
+  access token is memory-only, so otherwise guards would bounce the user to `/login`).
+- **`app.routes.ts`** — `authGuard` on the shell's parent route; `roleGuard(['admin'])`
+  on `/users` and the new `/users/new`; `guestGuard` on `/login`; added `/forbidden`.
+- **`layout/shell`** — sidebar links are now filtered by role (a `computed` over the
+  user signal), and the topbar shows the signed-in name, a role badge and Sign out.
+- **`frontend/README.md`** — replaced the Angular CLI boilerplate with a real
+  orientation page pointing at `FRONTEND_WORKING.md` and `CHANGELOG.md`.
+
+### Verified
+19 automated browser checks against the live backend, all passing (puppeteer-core run
+from a scratch folder — **no test dependency was added to this project**):
+- anonymous access to `/jobs` redirects to `/login?returnUrl=%2Fjobs`
+- wrong password surfaces the backend's "Invalid email or password" and stays on `/login`
+- admin login lands on `/dashboard`; topbar shows the user and role badge
+- `localStorage` holds exactly one key — the access token is never persisted
+- reload keeps the session using exactly **one** `/auth/refresh`, then `/auth/me`
+- `/users/new` creates a real account through the live API
+- forced 401s: two simultaneous failures cause exactly **one** `/auth/refresh`, both
+  requests are retried, and the UI recovers
+- when refresh itself fails, the session clears and the user is routed to `/login`
+- sign out clears storage and the old refresh token is then rejected **401** server-side
+- leadership sees no Users links and `/users` redirects to `/forbidden`
+- `guestGuard` keeps a signed-in user off `/login`
+
+Production build clean: initial 294.08 kB (85.32 kB transfer).
+Test accounts created and kept: `analyst@example.com`, `leadership@example.com`.
+
+### Not done yet (by design)
+No CRUD tables or forms beyond user creation — the users/agents/tools management screens
+are Milestone 11. `UsersPage` is still a placeholder.
+
+---
+
 ## [Milestone 9 — Angular Project Setup] — 2026-07-26
 
 **Goal:** Stand up the Angular project: routing, environment configuration for the API

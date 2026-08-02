@@ -1,12 +1,16 @@
 import {
   ApplicationConfig,
+  inject,
+  provideAppInitializer,
   provideBrowserGlobalErrorListeners,
   provideZoneChangeDetection,
 } from '@angular/core';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { provideRouter, withComponentInputBinding } from '@angular/router';
 
 import { routes } from './app.routes';
+import { authInterceptor } from './core/interceptors/auth-interceptor';
+import { AuthService } from './core/services/auth.service';
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -17,7 +21,11 @@ export const appConfig: ApplicationConfig = {
     // (e.g. :id) as normal @Input()s — used from the detail screens onward.
     provideRouter(routes, withComponentInputBinding()),
 
-    // The auth interceptor is registered here in the next milestone.
-    provideHttpClient(),
+    provideHttpClient(withInterceptors([authInterceptor])),
+
+    // Restore the session before the app renders. The access token only lives
+    // in memory, so after a reload the stored refresh token has to be exchanged
+    // for a new one — otherwise the guards would bounce the user to /login.
+    provideAppInitializer(() => inject(AuthService).restoreSession()),
   ],
 };

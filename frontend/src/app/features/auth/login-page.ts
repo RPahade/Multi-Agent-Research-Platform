@@ -1,36 +1,58 @@
-import { Component } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { Component, inject, signal } from '@angular/core';
+import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { ActivatedRoute, Router } from '@angular/router';
 
-/**
- * Placeholder sign-in screen. The real form (form-encoded login, token
- * storage, refresh handling) is built in the authentication milestone.
- * Rendered outside the shell — no sidebar on the login screen.
- */
+import { apiErrorMessage } from '../../core/services/api-error';
+import { AuthService } from '../../core/services/auth.service';
+
 @Component({
   selector: 'app-login-page',
-  imports: [RouterLink],
-  template: `
-    <div class="wrap">
-      <div class="card box">
-        <h1>Sign in</h1>
-        <p class="muted">
-          The sign-in form is built in the authentication milestone.
-        </p>
-        <a routerLink="/dashboard">Go to the dashboard</a>
-      </div>
-    </div>
-  `,
-  styles: `
-    .wrap {
-      display: grid;
-      place-items: center;
-      min-height: 100vh;
-      padding: var(--space-4);
-    }
-    .box {
-      width: 100%;
-      max-width: 380px;
-    }
-  `,
+  imports: [ReactiveFormsModule],
+  templateUrl: './login-page.html',
+  styleUrl: './login-page.scss',
 })
-export class LoginPage {}
+export class LoginPage {
+  private readonly fb = inject(FormBuilder);
+  private readonly auth = inject(AuthService);
+  private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
+
+  readonly loading = signal(false);
+  readonly error = signal<string | null>(null);
+
+  readonly form = this.fb.nonNullable.group({
+    email: ['', [Validators.required, Validators.email]],
+    password: ['', [Validators.required]],
+  });
+
+  submit(): void {
+    if (this.form.invalid) {
+      this.form.markAllAsTouched();
+      return;
+    }
+
+    this.loading.set(true);
+    this.error.set(null);
+
+    const { email, password } = this.form.getRawValue();
+
+    this.auth.login(email, password).subscribe({
+      next: () => {
+        // Send the user back to whatever they tried to open before signing in.
+        const returnUrl =
+          this.route.snapshot.queryParamMap.get('returnUrl') ?? '/dashboard';
+        this.router.navigateByUrl(returnUrl);
+      },
+      error: (err) => {
+        this.error.set(apiErrorMessage(err));
+        this.loading.set(false);
+      },
+    });
+  }
+
+  /** True once the user has interacted with a field that is still invalid. */
+  showError(field: 'email' | 'password'): boolean {
+    const control = this.form.controls[field];
+    return control.invalid && control.touched;
+  }
+}

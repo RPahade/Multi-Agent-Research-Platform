@@ -1,59 +1,49 @@
-# Frontend
+# Frontend — Multi-Agent Research Intelligence Platform
 
-This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 20.3.32.
+Angular 20 UI for the research platform. Analysts upload source documents, ask a
+research question, watch the agent job run, and read the cited report it produces.
 
-## Development server
+> **Working on this code? Start with [FRONTEND_WORKING.md](FRONTEND_WORKING.md)** —
+> current state, folder map, conventions, decisions and next steps.
+> History per milestone is in [CHANGELOG.md](CHANGELOG.md).
+> The backend API contract is [`../FRONTEND.md`](../FRONTEND.md); the authoritative
+> spec is always the live `http://localhost:8000/openapi.json`.
 
-To start a local development server, run:
+## Run it
 
-```bash
-ng serve
-```
-
-Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
-
-## Code scaffolding
-
-Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
+The backend must be running first — the UI is useless without it.
 
 ```bash
-ng generate component component-name
+# 1. backend, from the repo root
+docker compose up -d          # health check: http://localhost:8000/api/v1/health
+
+# 2. frontend, from this folder
+npm install                   # first time only
+npm start                     # http://localhost:4200
 ```
 
-For a complete list of available schematics (such as `components`, `directives`, or `pipes`), run:
+Sign in with the seeded admin: `admin@example.com` / `ChangeMe123!`
 
-```bash
-ng generate --help
+The dev server proxies `/api` to `http://localhost:8000` (see `proxy.conf.json`), so
+the app calls same-origin `/api/v1/...` and CORS never applies in development.
+
+## Commands
+
+| Command | What it does |
+|---|---|
+| `npm start` | Dev server on :4200 with the API proxy |
+| `npm run build` | Production build into `dist/frontend` |
+| `npm test` | Unit tests (Karma + Jasmine) |
+
+## How it is organised
+
+```
+src/app/
+  core/        loaded once — API models, services, guards, interceptors
+  shared/      reusable presentational components
+  layout/      the app shell (sidebar + topbar)
+  features/    one folder per screen area
 ```
 
-## Building
-
-To build the project run:
-
-```bash
-ng build
-```
-
-This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
-
-## Running unit tests
-
-To execute unit tests with the [Karma](https://karma-runner.github.io) test runner, use the following command:
-
-```bash
-ng test
-```
-
-## Running end-to-end tests
-
-For end-to-end (e2e) testing, run:
-
-```bash
-ng e2e
-```
-
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
-
-## Additional Resources
-
-For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
+Full details, conventions and the route table are in
+[FRONTEND_WORKING.md](FRONTEND_WORKING.md).
