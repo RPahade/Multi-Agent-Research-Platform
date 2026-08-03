@@ -7,26 +7,45 @@
 > Every item below was **verified against the live API** (`http://localhost:8000/openapi.json`
 > plus real requests), not assumed. Each says what the frontend does today without it.
 >
-> _Last updated: 2026-08-02, after frontend Milestone 12 (Research Job Form)._
+> _Last updated: 2026-08-02, after frontend Milestone 14 (Report View)._
 
 ---
 
-## Status summary
+# 🚧 BLOCKERS
+
+**✅ No blockers remain.** The one blocker (#0, report chat) is **delivered** — see below.
+Everything else in this file is a non-blocking workaround or nice-to-have.
+
+| # | Request | Status |
+|---|---------|---|
+| **0** | **`POST /api/v1/reports/{id}/chat`** — grounded chat over a report | ✅ **DELIVERED 2026-08-02** — contract honoured exactly. **Frontend confirmed 2026-08-03:** the panel self-enabled with **no code change**, and 13/13 live browser checks passed against the real endpoint (grounded answers with quoted citations, `grounded: false` on off-topic questions, leadership access). Two small reconciliations were made on the frontend side — see [section 0](#0-report-chat-endpoint--blocker). |
+
+---
+
+## Status summary — everything else (non-blocking)
 
 | # | Request | Priority | Blocking? |
 |---|---------|:---:|---|
-| 1 | Sorting (`sort_by` + `order`) on list endpoints | **High** | Partially blocks the M11 "sorting" requirement |
-| 2 | Per-job tool selection (`input.tools`) | **High** | Partially blocks the M12 "tool configuration" requirement |
-| 3 | Make `agent_id` actually drive prompt/model | **High** | The field is accepted but has no effect |
-| 4 | Reject unknown query params instead of ignoring them | Medium | No — but it hides bugs like #1 |
-| 5 | Expose `audit_logs` via an API endpoint | Medium | No — jobs feed used instead |
-| 6 | Report export (DOCX / PDF download) | Medium | Will block a "download report" feature |
-| 7 | `q` search + date filters on `GET /jobs` | Low | No |
-| 8 | A single dashboard summary/counts endpoint | Low | No — 6 calls used instead |
-| 9 | CORS origin for a deployed frontend | Low | Only for non-dev deployment |
-| 10 | Clean up leftover test rows | Low | No — cosmetic |
+| 1 | Sorting (`sort_by` + `order`) on list endpoints | **High** | No — client-side sort ships, labelled |
+| 2 | Per-job tool selection (`input.tools`) | **High** | No — read-only pipeline preview ships |
+| 3 | Make `agent_id` actually drive prompt/model | **High** | No — the picker is labelled as provenance-only |
+| 4 | Persist the retrieved source passages | **High** | No — but citation markers stay untraceable |
+| 5 | Reject unknown query params instead of ignoring them | Medium | No — but it hides bugs like #1 |
+| 6 | Expose `audit_logs` via an API endpoint | Medium | No — jobs feed used instead |
+| 7 | Report export (DOCX / PDF download) | Medium | No — will block a "download report" button |
+| 8 | `q` search + date filters on `GET /jobs` | Low | No |
+| 9 | A single dashboard summary/counts endpoint | Low | No — 6 calls used instead |
+| 10 | CORS origin for a deployed frontend | Low | Only for non-dev deployment |
+| 11 | Clean up leftover test rows | Low | No — cosmetic |
 
 **Already delivered by the backend** (thank you — no action needed):
+- ✅ **Report chat** (`POST /api/v1/reports/{id}/chat`) — grounded Q&A over a report.
+  Delivered 2026-08-02, honouring the section-0 contract: request `{message, history?}`;
+  response `{answer, citations:[{quote, source, section?}], grounded, generated_by}`. Grounds
+  on the report content **+ live RAG** over the report's job documents (embeds the question,
+  pgvector search). Any authenticated user; **404** unknown report; **422** empty/blank message;
+  **503** with a clear detail if the LLM is down (no hallucinated fallback). Stateless — client
+  replays `history` (capped to last 20). Verified live (grounded answer with real quoted citations).
 - ✅ **Query-param token on the SSE stream** (`GET /jobs/{id}/stream?token=…`), which lets
   the browser's native `EventSource` work. Documented in `FRONTEND.md` §7.
 
@@ -35,6 +54,103 @@
   there is none and that `POST /users` is admin-only (401 when anonymous). The product
   decision was that registration is **an administrator creating the account**, which
   also prevents anyone self-assigning a role. No backend change wanted.
+
+---
+
+## 0. Report chat endpoint — ✅ DELIVERED (2026-08-02)
+
+> **Implemented as specified below.** Endpoint: `POST /api/v1/reports/{report_id}/chat`.
+> Grounds on report content + live RAG over the report's job documents. Any authenticated
+> user; 404/422 as requested; **503** (not a fake answer) when the LLM is down. Stateless.
+> The exact request/response shapes below are honoured — the chat UI should self-enable.
+>
+> **✅ Frontend confirmed, 2026-08-03.** The panel self-enabled with no code change; the
+> capability probe found the path on first load. 13/13 live browser checks passed against
+> the real endpoint. Two frontend reconciliations were needed after reading the shipped
+> contract — neither is a backend problem:
+> 1. The message cap was raised from 1000 to **4000** to match `ChatRequest.maxLength`.
+> 2. The frontend previously treated a 404 as "endpoint missing" and disabled chat. Now
+>    that 404 means *unknown report*, that logic was removed — the OpenAPI probe is the
+>    single source of truth for availability, and errors are surfaced as errors.
+>
+> Observed live: `citations[].source` comes back as `"REPORT"` with the report section in
+> `section`, rather than a `[n]` marker. The UI renders whatever is present, so this is
+> fine — noting it only so nobody expects the marker to line up with the report's own
+> numbered citation list.
+
+### The problem
+
+**There is no chat endpoint anywhere in the API.** Searched all 26 paths for
+`chat`, `conversation`, `message`, `ask`, `query`, `qa` — zero matches.
+
+The product README promises the platform "enables interactive chat with the evidence",
+and frontend Milestone 14 asks for *"interactive chat linked to report data"* whose
+*"responses reference actual report content"*. There is nothing to call.
+
+### What the frontend does today
+
+The report view ships complete (content, citations, versions, provenance). The **chat
+panel is fully built** — message thread, input, per-message citations, loading and error
+states — but it renders a "chat is not enabled on this backend yet" notice instead of
+sending.
+
+**It self-enables.** On load the frontend reads `/openapi.json` and looks for a path
+matching `/reports/{…}/chat`. The moment the endpoint exists, chat turns on with **no
+frontend change or redeploy** — as long as the shapes below are honoured.
+
+### Requested — `POST /api/v1/reports/{report_id}/chat`
+
+**Stateless is fine for v1** — the client keeps the transcript and replays it. That
+avoids new tables and is the fastest route to unblocking the UI. Persisted conversations
+can come later without breaking this contract.
+
+**Request body**
+```jsonc
+{
+  "message": "How do the two vendors differ on breach notification?",
+  "history": [                                   // optional, oldest first
+    { "role": "user",      "content": "…" },
+    { "role": "assistant", "content": "…" }
+  ]
+}
+```
+
+**Response body**
+```jsonc
+{
+  "answer": "Vendor A commits to 72 hours; Vendor B's contract does not state a fixed window [2].",
+  "citations": [
+    {
+      "quote": "Vendor A commits to notifying the customer within 72 hours…",
+      "source": "[1]",                 // marker, matching the report's own style
+      "section": "Breach Notification" // optional: which report section it came from
+    }
+  ],
+  "grounded": true,                    // false when the answer is not supported by the sources
+  "generated_by": { "provider": "gemini", "model": "gemini-flash-latest", "usage": { } }
+}
+```
+
+**Grounding requirements** (this is the part that matters for requirement 3):
+- Answer **only** from the report's `content` (summary + sections + citations) and,
+  ideally, the chunks of the documents the report's job used.
+- When the sources do not support an answer, say so plainly and set `grounded: false`
+  rather than inventing one. The frontend renders that state distinctly.
+- Always return `citations` for a grounded answer, so the UI can show what backs it.
+
+**Behaviour**
+- **RBAC:** any authenticated user (reads are open to all three roles, matching
+  `GET /reports/{id}`). If you would rather restrict it to analyst + admin, say so and
+  the frontend will gate the panel.
+- **404** if the report does not exist. **422** for an empty message.
+- Reuse the existing `LLMClient` and its graceful-degradation path — if the provider is
+  down, a clear error beats a hallucinated answer.
+- Suggested cap: ~20 history messages, and a max message length (the frontend will
+  enforce whatever you choose).
+
+**Optional, not required for v1:** token streaming over SSE. The frontend already has
+`EventSource` plumbing from the job stream, so it could be adopted later — but a plain
+JSON response is enough to unblock, and simpler to build.
 
 ---
 
@@ -183,7 +299,52 @@ agent is set.
 
 ---
 
-## 4. Reject unknown query params — Medium
+## 4. Persist the retrieved source passages — **High priority**
+
+### The problem
+
+A report's citations look like `{"claim": "Vendor A notifies within 72 hours…",
+"source": "[1]"}` — but **nothing in the API says what `[1]` is**.
+
+I checked whether the marker is resolvable. The retrieval step's recorded output is:
+
+```json
+{"top_k": 5, "retrieved": 5, "top_score": 0.6779, "documents_searched": "all"}
+```
+
+Counts and metadata — **not the passages**. The research step likewise records
+`{"via": "mcp", "sources": 3, "findings": 3}`. `RetrievalTool` writes the passages to
+`ctx.input["sources"]`, but that is a working copy (`params = dict(job.input or {})`),
+so it never reaches the stored `job.input`. The retrieved text is discarded once the job
+finishes.
+
+### Why it matters
+
+Citations that cannot be traced to a source are not really auditable, which undercuts
+the platform's compliance story. A reader can see the *claim* but never the evidence
+behind it. It also limits the chat endpoint in section 0 — the richest grounding source
+is exactly the passages that were retrieved.
+
+### What the frontend does today
+
+Renders each citation's `claim` text with its marker, and links to the job so a reader
+can at least see which documents were searched. The marker itself is inert — there is
+nothing to link it to.
+
+### Requested
+
+Persist the retrieved passages so a citation marker resolves to real text. Either:
+
+- store them in the retrieval step's `output` (e.g.
+  `sources: [{index: 1, document_id, chunk_index, text, score}]`), or
+- add them to `report.content.sources` alongside `citations`.
+
+The second is friendlier for the report view, since the report becomes self-contained.
+Either way the frontend can then render `[1]` as a link that reveals the quoted passage.
+
+---
+
+## 5. Reject unknown query params — Medium
 
 Related to #1, and the reason it went unnoticed. FastAPI ignores query params it does
 not declare, so `?sort_by=title` returns 200 with unsorted data — indistinguishable from
@@ -195,7 +356,7 @@ silent no-op into an obvious error.
 
 ---
 
-## 5. Expose `audit_logs` through an API — Medium
+## 6. Expose `audit_logs` through an API — Medium
 
 `WORKING.md` documents an `audit_logs` table (added in backend M2, BIGINT PK,
 high-volume), but **no endpoint exposes it** — confirmed: no path matching `audit` in
@@ -214,7 +375,7 @@ endpoint (`user_id`, `action`, `entity_type`, `entity_id`, date range), admin-on
 
 ---
 
-## 6. Report export — DOCX / PDF download — Medium
+## 7. Report export — DOCX / PDF download — Medium
 
 Noted as not built in `FRONTEND.md` §9; confirmed no `export` or `download` path exists.
 `JobType` already includes an `export` member, so the groundwork is partly there.
@@ -229,7 +390,7 @@ and reusing the existing job/SSE machinery would fit the current architecture we
 
 ---
 
-## 7. `q` search and date filters on `GET /jobs` — Low
+## 8. `q` search and date filters on `GET /jobs` — Low
 
 `GET /jobs` accepts only `status` and `type` — no free-text search, unlike `/reports`,
 `/documents`, `/users`, `/agents` and `/tools`, which all have `q`.
@@ -239,7 +400,7 @@ and reusing the existing job/SSE machinery would fit the current architecture we
 
 ---
 
-## 8. A dashboard summary endpoint — Low
+## 9. A dashboard summary endpoint — Low
 
 The dashboard needs six counts. With no counts endpoint, the frontend issues **six
 parallel `?size=1` requests** and reads each `total`:
@@ -257,7 +418,7 @@ e.g. totals for reports/jobs/documents/agents plus a job breakdown by status.
 
 ---
 
-## 9. CORS for a deployed frontend — Low
+## 10. CORS for a deployed frontend — Low
 
 Already noted in `FRONTEND.md` §9. `CORS_ORIGINS` currently allows `http://localhost:4200`.
 Any non-dev deployment needs its origin added. **No action needed while developing** —
@@ -265,7 +426,7 @@ the Angular dev server proxies `/api` to `:8000`, so requests are same-origin.
 
 ---
 
-## 10. Leftover test rows — Low (data, not code)
+## 11. Leftover test rows — Low (data, not code)
 
 Not a code change, but visible in the UI:
 

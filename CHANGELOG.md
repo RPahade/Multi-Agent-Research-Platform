@@ -57,8 +57,16 @@ Tools, Reports, Jobs), with migrations, and support for audit logging + versioni
 
 ---
 
-## [Frontend enablement] — 2026-07-26
+## [Frontend enablement] — 2026-07-26 / 2026-08-02
 
+- **Report chat (frontend blocker #0)** — `POST /api/v1/reports/{id}/chat`: grounded Q&A over
+  a report. Grounds on `report.content` + **live RAG** (embeds the question, pgvector search
+  over the report's job documents), reuses `LLMClient`, returns `{answer, citations, grounded,
+  generated_by}`. Stateless (client replays `history`, capped to 20). Any authenticated user;
+  404 unknown report; 422 empty/blank message; **503** with a clear detail if the LLM is down
+  (no hallucinated fallback). New: `schemas/chat.py`, `services/chat_service.py`, route in
+  `reports.py`, chat config caps. No migration. Verified live (12/12: grounded answer with real
+  quoted citations, follow-up-with-history, 422/404/401 paths).
 - **SSE query-param auth**: `GET /jobs/{id}/stream` now accepts the access token from
   `?token=<access_token>` **or** the `Authorization` header — so the browser's native
   `EventSource` (which can't set headers) works directly. Added `get_current_user_sse` +

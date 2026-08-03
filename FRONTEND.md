@@ -74,7 +74,8 @@ All under `/api/v1`. Lists are **paginated + filtered** (see §5).
 - **Users** (admin): `GET /users`, `GET /users/{id}`, `POST /users`, `PATCH /users/{id}`, `DELETE /users/{id}`
 - **Agents:** `GET /agents`, `GET /agents/{id}`, `POST/PATCH/DELETE` (writes admin)
 - **Tools:** `GET /tools`, `GET /tools/{id}`, `POST/PATCH/DELETE` (writes admin)
-- **Reports:** `GET /reports`, `GET /reports/{id}`, `GET /reports/{id}/versions`, `POST/PATCH/DELETE` (writes analyst+admin)
+- **Reports:** `GET /reports`, `GET /reports/{id}`, `GET /reports/{id}/versions`, `POST/PATCH/DELETE` (writes analyst+admin),
+  `POST /reports/{id}/chat` (**grounded chat**, any auth — body `{message, history?}` → `{answer, citations, grounded, generated_by}`; **503** if LLM down)
 - **Jobs:** `POST /jobs` (async; optional `Idempotency-Key` header), `GET /jobs`, `GET /jobs/{id}`,
   `GET /jobs/{id}/steps` (per-tool trace), `POST /jobs/{id}/cancel`, `GET /jobs/{id}/stream` (**SSE**)
 - **Documents:** `POST /documents` (**multipart** `file=`), `GET /documents`, `GET /documents/{id}`,

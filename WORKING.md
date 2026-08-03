@@ -137,6 +137,7 @@ d:\Multiagent\
 - `GET /api/v1/health/db` → `{status:"ok", database:"reachable"}` (runs `SELECT 1`)
 - **Auth (M3):** `POST /api/v1/auth/login` · `POST /auth/refresh` · `POST /auth/logout` · `GET /auth/me`
 - **CRUD (M4):** `/api/v1/{users,agents,tools,reports}` — `GET` (list, paginated+filtered), `GET /{id}`, `POST`, `PATCH /{id}`, `DELETE /{id}` (soft). Plus `GET /reports/{id}/versions`.
+- **Report chat (FE blocker #0):** `POST /api/v1/reports/{id}/chat` — grounded Q&A over a report (report content + live RAG over its job's documents), reuses `LLMClient`; `{answer, citations, grounded, generated_by}`; 503 if LLM down. Stateless. Files: `schemas/chat.py`, `services/chat_service.py`.
 - **Jobs (M5):** `POST /api/v1/jobs` (async; optional `Idempotency-Key` header dedups), `GET /jobs` (list/filter), `GET /jobs/{id}` (status+progress+attempts), `POST /jobs/{id}/cancel`, `GET /jobs/{id}/stream` (**SSE** live status).
 - **Jobs orchestration (M6):** `GET /jobs/{id}/steps` — per-tool orchestration trace (status/output/error per tool).
 - **MCP (M6):** `GET /api/v1/mcp/status`. **Kafka (M7):** `GET /api/v1/events/status`.

@@ -77,6 +77,11 @@ class Settings(BaseSettings):
     chunk_overlap: int = 150
     retrieval_top_k: int = 5
 
+    # --- Report chat (grounded Q&A over a report) ---
+    chat_history_max_messages: int = 20
+    chat_message_max_chars: int = 4000
+    chat_retrieval_top_k: int = 6
+
     # --- MCP tools (Milestone 6, step 4) ---
     mcp_enabled: bool = False
     mcp_server_url: str = "http://mcp:8090/mcp"

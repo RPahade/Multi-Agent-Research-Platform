@@ -16,10 +16,12 @@ from app.api.utils import get_active_or_404
 from app.db.session import get_db
 from app.models.report import Report
 from app.models.user import User
+from app.schemas.chat import ChatRequest, ChatResponse
 from app.schemas.common import Page, PageParams
 from app.schemas.report import ReportCreate, ReportRead, ReportUpdate, ReportVersionRead
 from app.models.enums import ReportStatus
-from app.services import report_service
+from app.services import chat_service, report_service
+from app.services.chat_service import ChatUnavailable
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
@@ -60,6 +62,29 @@ def list_report_versions(
 ) -> list:
     report = get_active_or_404(db, Report, report_id, "Report")
     return report_service.list_versions(db, report)
+
+
+@router.post(
+    "/{report_id}/chat",
+    response_model=ChatResponse,
+    summary="Ask a grounded question about a report",
+)
+def chat_with_report(
+    report_id: uuid.UUID,
+    payload: ChatRequest,
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+) -> dict:
+    """Answer a question using only the report's content + a fresh retrieval over its
+    source documents. Returns citations and a ``grounded`` flag; 503 if the LLM is down."""
+    report = get_active_or_404(db, Report, report_id, "Report")
+    try:
+        return chat_service.answer_report_question(db, report, payload.message, payload.history)
+    except ChatUnavailable as exc:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            f"Chat is temporarily unavailable: {exc}",
+        ) from exc
 
 
 @router.post("", response_model=ReportRead, status_code=status.HTTP_201_CREATED, summary="Create a report")
