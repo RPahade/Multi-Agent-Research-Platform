@@ -68,6 +68,12 @@ export const routes: Routes = [
           import('./features/reports/reports-page').then((m) => m.ReportsPage),
       },
       {
+        path: 'reports/:id',
+        title: 'Report',
+        loadComponent: () =>
+          import('./features/reports/report-detail-page').then((m) => m.ReportDetailPage),
+      },
+      {
         path: 'users',
         title: 'Users',
         canActivate: [roleGuard(['admin'])],

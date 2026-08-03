@@ -4,5 +4,10 @@
     "secure": false,
     "changeOrigin": true,
     "logLevel": "debug"
+  },
+  "/openapi.json": {
+    "target": "http://localhost:8000",
+    "secure": false,
+    "changeOrigin": true
   }
 }

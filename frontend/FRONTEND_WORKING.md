@@ -45,13 +45,16 @@ background job and produces a cited report. Three roles — `admin` (governance)
 | 11 | Dashboard — paginated reports, agent status, recent logs, filter/sort | ✅ done |
 | 12 | Research Job Form — topic, upload, configuration, validation | ✅ done |
 | 13 | Progress View — live SSE progress, per-tool status, cancel | ✅ done |
-| 14 | *to be confirmed* | next |
-| 15–16 | *to be confirmed* | planned |
+| 14 | Report View — content, citations, versions, grounded chat | ✅ done (chat live) |
+| 15 | *to be confirmed* | next |
+| 16 | *to be confirmed* | planned |
 
 *(The user supplies each milestone's definition; do not assume the remaining titles.
-Still unbuilt and expected somewhere in M14–M16: report detail with sections,
-citations and version history; a documents management screen; and the
-users/agents/tools CRUD write screens.)*
+Still unbuilt: a documents management screen, and the users/agents/tools CRUD write
+screens.)*
+
+> **✅ No open blockers.** The report chat endpoint was delivered by the backend on
+> 2026-08-02 and confirmed working from the UI on 2026-08-03.
 
 ### Workflow convention (per milestone)
 1. **Design first** — propose the approach, confirm decisions.
@@ -62,7 +65,7 @@ users/agents/tools CRUD write screens.)*
 
 ---
 
-## 4. Current state — what EXISTS right now (after Milestone 13)
+## 4. Current state — what EXISTS right now (after Milestone 14)
 
 ### Folder structure
 
@@ -106,7 +109,9 @@ frontend/
         jobs/                  # JobsPage (list), JobDetailPage (live progress),
                                # NewJobPage, document-upload, pipeline-preview,
                                # jobs.service.ts, job-stream.service.ts
-        reports/ agents/ documents/          # placeholder pages + their API services
+        reports/               # ReportsPage (list), ReportDetailPage, report-chat,
+                               # reports.service.ts, report-chat.service.ts
+        agents/ documents/                   # placeholder pages + their API services
         tools/ forbidden/ not-found/
 ```
 
@@ -138,7 +143,9 @@ requires a signed-in user (`authGuard` on the parent route).
 | `/jobs/:id` | `JobDetailPage` | auth | **real** — live progress (M13) |
 | `/users/new` | `CreateUserPage` | auth + `roleGuard(['admin'])` | **real** — registration |
 | `/users` | `UsersPage` | auth + `roleGuard(['admin'])` | placeholder |
-| `/documents` `/reports` `/agents` `/tools` | feature pages | auth | placeholder |
+| `/reports` | `ReportsPage` | auth | **real** — paginated list (M14) |
+| `/reports/:id` | `ReportDetailPage` | auth | **real** — content, citations, versions, chat (M14) |
+| `/documents` `/agents` `/tools` | feature pages | auth | placeholder |
 | `/forbidden` | `ForbiddenPage` | auth | real |
 | `**` | `NotFoundPage` | — | real |
 
@@ -280,6 +287,57 @@ browser-facing bridge and a browser cannot speak the Kafka protocol. SSE is the 
 
 **Testing note:** puppeteer's `waitUntil: 'networkidle0'` never fires on this page — the
 stream deliberately holds a connection open. Use `domcontentloaded`.
+
+### Report view (Milestone 14)
+
+`/reports/:id`, readable by every role. Renders summary, sections, a numbered citation
+list, provenance (`generated_by` model + tokens, plus the compliance PII scan), a link
+to the producing job, and version history from `GET /reports/{id}/versions` — clicking a
+version swaps the page to that snapshot with a "historical snapshot" notice.
+
+`content` is free-form JSON, so everything is read defensively: `sections`, `citations`,
+`warnings` and `generated_by` may all be absent, and `degraded: true` gets a prominent
+banner saying the content is a deterministic fallback rather than a real analysis.
+
+✅ **Chat is live.** `POST /reports/{id}/chat` shipped on 2026-08-02 and the panel
+self-enabled with **no frontend change** — the capability probe found the path on first
+load. Confirmed against the real endpoint on 2026-08-03 (13/13 checks).
+
+**How the backend grounds it:** report content **plus live RAG** (it embeds the question
+and runs pgvector search over the report's job documents), reusing `LLMClient`. It is
+stateless — the client replays `history`, capped at 20 turns. It returns
+`grounded: false` and says so plainly rather than inventing an answer, and answers
+**503** when the language model is down instead of a fabricated fallback. So surfacing
+the backend's own error text matters; the panel does exactly that.
+
+**Contract:** request `{message (1–4000 chars), history?: [{role, content}]}`;
+response `{answer, citations?: [{quote, source, section?}], grounded, generated_by?}`.
+Any authenticated user — leadership included. 404 unknown report, 422 blank message.
+
+**Availability is still probed, not assumed.** `ReportChatService.isAvailable()` fetches
+`/openapi.json` once and looks for a path matching `/reports/{…}/chat`. That is what let
+the UI ship before the endpoint existed, and it keeps the panel honest against a backend
+where chat is absent or disabled. (`/openapi.json` is proxied in `proxy.conf.json` so the
+probe works in dev.) **The probe is the single source of truth** — do not treat a 404
+from a send as "endpoint missing", because 404 now means *unknown report*.
+
+**Observed:** `citations[].source` comes back as `"REPORT"` with the report section in
+`section`, not a `[n]` marker — so chat citations do not line up with the report's own
+numbered list. The UI renders whatever fields are present.
+
+⚠️ **Citation markers are not resolvable.** Citations carry `{claim, source: "[1]"}` but
+the backend never persists the retrieved passages — the retrieval step's output is only
+`{top_k, retrieved, top_score, documents_searched}`. The UI shows each claim with its
+marker and says plainly that the marker cannot be expanded. Backend request #4.
+
+🐛 **Two bugs the verification caught — do not reintroduce them:**
+
+1. **`[disabled]` does nothing on a reactive-form input.** The form directive owns the
+   disabled state; bind nothing and call `form.disable()` / `form.enable()` instead.
+2. **`(ngSubmit)` is an output of the form directive, not a DOM event.** A `<form>` with
+   a bare `FormControl` and no `[formGroup]` has no directive attached, so submit never
+   fires and the button silently does nothing. Every form in this app uses
+   `[formGroup]` + `(ngSubmit)` — keep it that way.
 
 ### Models (`core/models/`)
 
@@ -423,6 +481,35 @@ including a **real end-to-end research run**:
 - Submitting `/jobs/new` lands on `/jobs/:id`.
 - Leadership can view a progress page but is **not** offered cancel.
 
+**Milestone 14** — 26 automated browser checks against the live backend, all passing:
+
+- Reports list renders; search reaches the API as one debounced `q` (20 → 7 results);
+  a row opens the detail view.
+- Report renders 2 sections with real prose (493 and 371 chars), 4 citations each with
+  its `[n]` marker, provenance (`gemini-flash-latest`, 2449 tokens, PII scan ran) and a
+  link back to the job.
+- A degraded report is flagged as a fallback rather than a real analysis.
+- Version history lists both versions; opening v1 shows the historical-snapshot notice,
+  and *Back to current* clears it.
+- Chat probes `/openapi.json`, shows the honest "not enabled" state, and **disables the
+  input**. *(Recorded when the endpoint did not exist; superseded below.)*
+- **Self-enable proven:** with the spec faked and the endpoint stubbed, the panel enabled
+  itself, sent `{"message":"…","history":[]}`, rendered the answer with its supporting
+  quote, and a follow-up replayed `history: user, assistant`.
+- Leadership can read a full report.
+
+**Chat against the real endpoint** — 13 further browser checks on 2026-08-03, all passing:
+
+- The "not enabled" notice is gone and the input is enabled **by the probe alone**, with
+  no code change — the self-enabling claim held.
+- The input cap is 4000, matching `ChatRequest`.
+- A real question returned a real answer citing the report's 72-hour commitment, with
+  **2 quoted citations** whose text is genuine report content, each naming its section
+  ("Data Breach Notification Timelines").
+- "What is the capital of France?" came back flagged as **not supported by this report**.
+- Each question is a separate `200` call to the live endpoint.
+- Leadership can chat and gets answers.
+
 ---
 
 ## 7. Notes, gotchas & things to know
@@ -463,11 +550,9 @@ including a **real end-to-end research run**:
 
 ## 8. Next steps
 
-**Milestone 14 is not yet defined** — the user supplies each milestone. These are the
+**Milestone 15 is not yet defined** — the user supplies each milestone. These are the
 pieces still missing, with the groundwork already in place:
 
-- **Report detail** — `reports.service.ts` has get/versions; the content renderer
-  (sections, citations, degraded banner) and version history are not built.
 - **Documents screen** — `documents.service.ts` has list/get/chunks/upload; a management
   screen (list, chunk inspector, delete) is not built.
 - **CRUD write screens** for users/agents/tools — the services are read-only apart from

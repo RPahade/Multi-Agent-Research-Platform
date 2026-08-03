@@ -1,0 +1,154 @@
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.head h2 {
+  margin: 0;
+}
+
+.pending {
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-4);
+  border: 1px solid var(--color-warning);
+  border-radius: var(--radius-sm);
+  background: var(--color-warning-soft);
+}
+
+.pending p {
+  margin: 0 0 var(--space-2);
+}
+
+.pending p:last-child {
+  margin-bottom: 0;
+}
+
+/* Everything below stays visible but inert while the endpoint is missing. */
+.thread.disabled {
+  opacity: 0.55;
+}
+
+.empty {
+  margin: 0 0 var(--space-3);
+}
+
+.suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.chip {
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.chip:hover:not(:disabled) {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.chip:disabled {
+  cursor: not-allowed;
+}
+
+.messages {
+  list-style: none;
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  max-height: 440px;
+  overflow-y: auto;
+}
+
+.messages li {
+  margin-bottom: var(--space-4);
+}
+
+.who {
+  display: block;
+  margin-bottom: var(--space-1);
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.text {
+  margin: 0;
+  padding: var(--space-3);
+  border-radius: var(--radius);
+  background: var(--color-bg);
+  white-space: pre-wrap;
+}
+
+.messages li.user .text {
+  background: var(--color-primary-soft);
+}
+
+.text.failed {
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+}
+
+.ungrounded {
+  margin: var(--space-2) 0 0;
+  color: var(--color-warning);
+  font-size: 13px;
+}
+
+.citations {
+  list-style: none;
+  margin: var(--space-2) 0 0;
+  padding: 0 0 0 var(--space-3);
+  border-left: 2px solid var(--color-border);
+}
+
+.citations li {
+  margin: 0 0 var(--space-2);
+  font-size: 13px;
+}
+
+.marker {
+  margin-right: var(--space-2);
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.section {
+  margin-right: var(--space-2);
+}
+
+.quote {
+  font-style: italic;
+}
+
+.composer {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.composer input {
+  flex: 1;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+}
+
+.composer input:focus {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -1px;
+}

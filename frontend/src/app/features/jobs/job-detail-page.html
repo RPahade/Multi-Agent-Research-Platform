@@ -113,7 +113,9 @@
       <h2>Result</h2>
 
       @if (report(); as report) {
-        <p class="report-title">{{ report.title }}</p>
+        <p class="report-title">
+          <a [routerLink]="['/reports', report.id]">{{ report.title }}</a>
+        </p>
         @if (report.summary) {
           <p class="muted">{{ report.summary }}</p>
         }
@@ -124,9 +126,8 @@
             unavailable, so this is a fallback report
           }
         </p>
-        <p class="field-hint">
-          The full report view — sections, citations and version history — is built
-          in a later milestone.
+        <p>
+          <a class="btn" [routerLink]="['/reports', report.id]">Read the full report</a>
         </p>
       } @else if (job.status === 'succeeded') {
         <p class="muted">This job finished but no report is linked to it.</p>

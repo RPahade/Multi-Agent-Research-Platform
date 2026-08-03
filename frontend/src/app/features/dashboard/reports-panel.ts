@@ -2,6 +2,7 @@ import { DatePipe } from '@angular/common';
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { debounceTime, distinctUntilChanged } from 'rxjs';
 
 import { REPORT_STATUSES, Report, ReportStatus } from '../../core/models';
@@ -16,7 +17,7 @@ type SortKey = 'title' | 'status' | 'version' | 'created_at';
 
 @Component({
   selector: 'app-reports-panel',
-  imports: [ReactiveFormsModule, DatePipe, StatusBadge, Paginator, EmptyState],
+  imports: [ReactiveFormsModule, RouterLink, DatePipe, StatusBadge, Paginator, EmptyState],
   templateUrl: './reports-panel.html',
   styleUrl: './reports-panel.scss',
 })

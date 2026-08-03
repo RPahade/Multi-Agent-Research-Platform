@@ -1,0 +1,162 @@
+<p class="crumb"><a routerLink="/reports">← All reports</a></p>
+
+@if (loading()) {
+  <p class="muted">Loading report…</p>
+} @else if (error()) {
+  <div class="card">
+    <h1>Report unavailable</h1>
+    <p class="form-error">{{ error() }}</p>
+  </div>
+} @else if (report(); as report) {
+  <div class="head">
+    <div>
+      <h1>{{ shownTitle() }}</h1>
+      <p class="meta muted">
+        <app-status-badge [status]="report.status" />
+        version {{ viewingVersion()?.version ?? report.version }} ·
+        updated {{ report.updated_at | date: 'medium' }}
+        @if (report.job_id) {
+          · <a [routerLink]="['/jobs', report.job_id]">view the job</a>
+        }
+      </p>
+    </div>
+  </div>
+
+  @if (viewingVersion(); as older) {
+    <p class="form-error version-note">
+      Showing version {{ older.version }} from {{ older.created_at | date: 'medium' }} —
+      this is a historical snapshot.
+      <button class="btn" type="button" (click)="showCurrent()">Back to current</button>
+    </p>
+  }
+
+  @if (content().degraded) {
+    <p class="form-error">
+      <strong>Degraded report.</strong> The language model was unavailable when this ran,
+      so the content below is a deterministic fallback rather than a generated analysis.
+    </p>
+  }
+
+  @if (warnings().length) {
+    <div class="card warnings">
+      <h3>Warnings from the pipeline</h3>
+      <ul>
+        @for (warning of warnings(); track warning) {
+          <li>{{ warning }}</li>
+        }
+      </ul>
+    </div>
+  }
+
+  <!-- The report itself -->
+  <article class="card report">
+    @if (shownSummary(); as summary) {
+      <section class="summary">
+        <h2>Summary</h2>
+        <p>{{ summary }}</p>
+      </section>
+    }
+
+    @if (sections().length) {
+      @for (section of sections(); track $index) {
+        <section class="body-section">
+          <h2>{{ section.heading }}</h2>
+          <p>{{ section.body }}</p>
+        </section>
+      }
+    } @else {
+      <p class="muted">This report has no sections.</p>
+    }
+
+    @if (citations().length) {
+      <section class="citations">
+        <h2>Citations</h2>
+        <p class="muted small">
+          Each claim the agent made, with the source marker it cited. The marker cannot
+          be expanded to the original passage — the backend does not persist the
+          retrieved text.
+        </p>
+        <ol>
+          @for (citation of citations(); track $index) {
+            <li>
+              <span class="claim">{{ citation.claim }}</span>
+              @if (citation.source) {
+                <span class="marker">{{ citation.source }}</span>
+              }
+            </li>
+          }
+        </ol>
+      </section>
+    } @else {
+      <section class="citations">
+        <h2>Citations</h2>
+        <p class="muted">No citations were recorded for this report.</p>
+      </section>
+    }
+  </article>
+
+  <!-- Chat -->
+  <app-report-chat [report]="report" />
+
+  <!-- Provenance + history -->
+  <div class="columns">
+    <section class="card">
+      <h2>How this was produced</h2>
+      <dl>
+        @if (provenance(); as info) {
+          <dt>Model</dt>
+          <dd>{{ info.model ?? 'unknown' }} @if (info.provider) { ({{ info.provider }}) }</dd>
+
+          @if (info.totalTokens) {
+            <dt>Tokens</dt>
+            <dd>{{ info.totalTokens }}</dd>
+          }
+        } @else {
+          <dt>Model</dt>
+          <dd class="muted">not recorded</dd>
+        }
+
+        @if (compliance(); as check) {
+          <dt>PII scan</dt>
+          <dd>
+            {{ check.scanned ? 'ran' : 'not run' }}
+            @if (check.scanned) {
+              · {{ check.pii_redacted ?? 0 }} redacted
+            }
+          </dd>
+        }
+
+        <dt>Created</dt>
+        <dd>{{ report.created_at | date: 'medium' }}</dd>
+      </dl>
+    </section>
+
+    <section class="card">
+      <h2>Version history</h2>
+      @if (versions().length === 0) {
+        <p class="muted">No earlier versions — this is the first.</p>
+      } @else {
+        <ul class="versions">
+          @for (version of versions(); track version.id) {
+            <li>
+              <button
+                class="version"
+                type="button"
+                [class.selected]="viewingVersion()?.id === version.id"
+                (click)="showVersion(version)"
+              >
+                <span class="v">v{{ version.version }}</span>
+                <span class="vtitle">{{ version.title }}</span>
+                <span class="muted small">{{ version.created_at | date: 'short' }}</span>
+              </button>
+            </li>
+          }
+        </ul>
+        <p class="field-hint">
+          Snapshots taken each time the report was rewritten — a retried job bumps the
+          version.
+        </p>
+      }
+    </section>
+  </div>
+}

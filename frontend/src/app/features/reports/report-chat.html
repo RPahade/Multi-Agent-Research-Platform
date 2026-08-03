@@ -1,0 +1,111 @@
+<section class="card chat">
+  <div class="head">
+    <h2>Ask about this report</h2>
+    @if (messages().length) {
+      <button class="btn" type="button" (click)="clear()">Clear</button>
+    }
+  </div>
+
+  @if (available() === null) {
+    <p class="muted">Checking whether chat is available…</p>
+  } @else if (available() === false) {
+    <!-- The endpoint is the one blocker in BACKEND_CHANGES_REQUIRED_FOR_FE.md §0. -->
+    <div class="pending">
+      <p><strong>Chat is not enabled on this backend yet.</strong></p>
+      <p class="muted">
+        Answering questions about a report requires
+        <code>POST /api/v1/reports/{{ '{' }}id{{ '}' }}/chat</code>, which the API does not
+        expose. The panel below is finished and will start working automatically as
+        soon as that endpoint exists — no update needed here.
+      </p>
+      <p class="muted">
+        <small>
+          The contract is specified in <code>BACKEND_CHANGES_REQUIRED_FOR_FE.md</code>,
+          section 0.
+        </small>
+      </p>
+    </div>
+  }
+
+  <div class="thread" [class.disabled]="available() === false">
+    @if (messages().length === 0) {
+      <p class="muted empty">
+        Ask a question and the answer will be drawn from this report's own content, with
+        the supporting evidence shown beneath it.
+      </p>
+
+      <div class="suggestions">
+        @for (suggestion of suggestions; track suggestion) {
+          <button
+            class="chip"
+            type="button"
+            [disabled]="available() === false"
+            (click)="use(suggestion)"
+          >
+            {{ suggestion }}
+          </button>
+        }
+      </div>
+    } @else {
+      <ul class="messages">
+        @for (message of messages(); track $index) {
+          <li [class]="message.role">
+            <span class="who">{{ message.role === 'user' ? 'You' : 'Assistant' }}</span>
+            <p class="text" [class.failed]="message.failed">{{ message.content }}</p>
+
+            @if (message.role === 'assistant' && message.grounded === false) {
+              <p class="ungrounded">
+                Not supported by this report — the answer above says so rather than
+                guessing.
+              </p>
+            }
+
+            @if (message.citations?.length) {
+              <ul class="citations">
+                @for (citation of message.citations; track $index) {
+                  <li>
+                    @if (citation.source) {
+                      <span class="marker">{{ citation.source }}</span>
+                    }
+                    @if (citation.section) {
+                      <span class="muted section">{{ citation.section }}</span>
+                    }
+                    @if (citation.quote) {
+                      <span class="quote">{{ citation.quote }}</span>
+                    }
+                  </li>
+                }
+              </ul>
+            }
+          </li>
+        }
+      </ul>
+    }
+
+    @if (sending()) {
+      <p class="muted">Thinking…</p>
+    }
+    @if (error()) {
+      <p class="form-error">{{ error() }}</p>
+    }
+  </div>
+
+  <!-- [formGroup] is required: ngSubmit comes from the form directive, not the DOM. -->
+  <form class="composer" [formGroup]="form" (ngSubmit)="send()">
+    <!-- No [disabled] binding here: the form owns that state (see ngOnInit). -->
+    <input
+      type="text"
+      formControlName="message"
+      [maxlength]="maxLength"
+      placeholder="Ask something about this report…"
+      aria-label="Ask a question about this report"
+    />
+    <button
+      class="btn btn-primary"
+      type="submit"
+      [disabled]="available() === false || sending() || form.invalid"
+    >
+      {{ sending() ? 'Sending…' : 'Ask' }}
+    </button>
+  </form>
+</section>

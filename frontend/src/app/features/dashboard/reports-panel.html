@@ -50,7 +50,7 @@
           @for (report of sortedItems(); track report.id) {
             <tr>
               <td>
-                <span class="title">{{ report.title }}</span>
+                <a [routerLink]="['/reports', report.id]" class="title">{{ report.title }}</a>
                 @if (report.summary) {
                   <span class="muted summary">{{ report.summary }}</span>
                 }

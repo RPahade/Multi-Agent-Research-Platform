@@ -1,0 +1,69 @@
+<h1>Reports</h1>
+<p class="muted">Every report the agent has produced. Open one to read it in full.</p>
+
+<section class="card">
+  <div class="filters">
+    <input
+      type="search"
+      placeholder="Search reports…"
+      [formControl]="qControl"
+      aria-label="Search reports"
+    />
+    <select [formControl]="statusControl" aria-label="Filter by status">
+      <option value="">All statuses</option>
+      @for (status of statuses; track status) {
+        <option [value]="status">{{ status }}</option>
+      }
+    </select>
+  </div>
+
+  @if (error()) {
+    <p class="form-error">{{ error() }}</p>
+  }
+
+  @if (loading()) {
+    <p class="muted">Loading…</p>
+  } @else if (items().length === 0) {
+    <app-empty-state message="No reports match these filters." />
+  } @else {
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Title</th>
+            <th>Status</th>
+            <th class="num">Version</th>
+            <th>Created</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (report of items(); track report.id) {
+            <tr>
+              <td>
+                <a [routerLink]="['/reports', report.id]" class="title">{{ report.title }}</a>
+                @if (report.summary) {
+                  <span class="muted summary">{{ report.summary }}</span>
+                }
+                @if (report.content.degraded) {
+                  <span class="badge badge-warning">degraded</span>
+                }
+              </td>
+              <td><app-status-badge [status]="report.status" /></td>
+              <td class="num">{{ report.version }}</td>
+              <td>{{ report.created_at | date: 'short' }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+
+  <app-paginator
+    [page]="page()"
+    [size]="size()"
+    [total]="total()"
+    [pages]="pages()"
+    (pageChange)="onPage($event)"
+    (sizeChange)="onSize($event)"
+  />
+</section>

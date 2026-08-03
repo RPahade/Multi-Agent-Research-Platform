@@ -7,6 +7,132 @@ Backend history lives in the repo-root `CHANGELOG.md`.
 
 ---
 
+## [Milestone 14 — Report chat wired to the live endpoint] — 2026-08-03
+
+The backend delivered `POST /api/v1/reports/{report_id}/chat`, closing the only blocker.
+**Milestone 14 is now complete.**
+
+**The self-enabling design held:** the panel turned itself on with **no code change** —
+the OpenAPI probe found the path on first load. What follows is reconciliation with the
+shipped contract, not new UI.
+
+### Changed
+- **Message cap raised 1000 → 4000** to match `ChatRequest.maxLength`. The backend chose
+  the limit; the frontend had been enforcing a placeholder.
+- **A 404 no longer disables chat.** When the endpoint did not exist, a 404 meant
+  "not deployed" and the panel switched itself off. In the shipped contract 404 means
+  *unknown report*, so that logic would have wrongly reported "chat is not enabled" for a
+  deleted report. The OpenAPI probe is now the single source of truth for availability.
+- **Backend errors are shown verbatim.** The generic "That question could not be
+  answered." was replaced with the API's own `detail`. This matters because the backend
+  answers **503 when the language model is down and deliberately does not fabricate a
+  fallback** — the user should see why, not a vague failure.
+
+### Verified — against the real endpoint, not a stub
+13 browser checks, all passing:
+- the "not enabled" notice is gone and the input is enabled **by the probe alone**
+- the input cap matches the contract (4000)
+- a real question returned a grounded answer citing the report's 72-hour commitment,
+  with **2 quoted citations** of genuine report text, each naming its section
+- "What is the capital of France?" was flagged **not supported by this report** rather
+  than answered
+- each question is a separate `200` call to the live endpoint
+- leadership can chat and gets answers (reads are open to all roles)
+
+Backend behaviour confirmed by direct API probe beforehand: `grounded: true` with
+citations for on-topic questions, `grounded: false` for off-topic, 422 blank message,
+404 unknown report, 401 unauthenticated, 200 for leadership.
+
+### Note
+`citations[].source` returns `"REPORT"` with the section in `section`, rather than a
+`[n]` marker — so chat citations do not line up with the report's own numbered citation
+list. The UI renders whatever fields are present, so nothing breaks.
+
+Production build clean, no warnings: initial 313.48 kB (91.05 kB transfer).
+
+---
+
+## [Milestone 14 — Report View] — 2026-08-02
+
+**Goal:** Show report content with citations, add interactive chat linked to report data,
+and ensure chat responses reference actual report content.
+
+**Status: items 1 done, items 2–3 blocked on the backend.** There is **no chat endpoint
+anywhere in the API** — all 26 paths checked for `chat`, `conversation`, `message`,
+`ask`, `query`, `qa`. The chat UI is complete and self-enabling; it needs
+`POST /reports/{id}/chat`, specified in `BACKEND_CHANGES_REQUIRED_FOR_FE.md` **section 0**.
+
+### Decisions (confirmed with user)
+- **Chat must feel realistic, so the backend comes first.** Rejected the client-side
+  quote-matching alternative and the "spawn a research job per message" alternative in
+  favour of a proper grounded endpoint. Build all the UI that does not depend on it now,
+  and resume when the endpoint lands.
+- **Blockers are called out separately** in the backend document, so the backend chat can
+  see at a glance what actually stops frontend progress versus what is a nice-to-have.
+
+### Added
+- **`features/reports/report-detail-page`** — summary, sections, a numbered citation
+  list, provenance (`generated_by` model/provider/tokens and the compliance PII scan), a
+  link to the producing job, and version history from `GET /reports/{id}/versions`.
+  Clicking a version swaps the page to that snapshot with a clear "historical snapshot"
+  notice and a way back. `content` is free-form JSON, so every field is read defensively;
+  `degraded: true` gets a prominent banner saying the content is a deterministic fallback.
+- **`features/reports/reports-page`** — replaced the placeholder with a real paginated
+  list: status filter, debounced search, rows linking to the detail view.
+- **`features/reports/report-chat`** + **`report-chat.service.ts`** — the full chat
+  panel: message thread, per-message citations, an explicit "not supported by this
+  report" state for ungrounded answers, starter suggestions, loading and error handling.
+  **It self-enables**: the service reads `/openapi.json` once and looks for a path
+  matching `/reports/{…}/chat`, so the panel starts working the moment the backend ships
+  the endpoint — no frontend change. A 404 from an actual send also flips it back.
+- **`/openapi.json` added to `proxy.conf.json`** so the capability probe works in dev.
+
+### Changed
+- **`app.routes.ts`** — added `/reports/:id`.
+- **`features/dashboard/reports-panel`** and **`features/jobs/job-detail-page`** — report
+  titles now link to the new detail view; the job page gained a *Read the full report*
+  button, replacing its "built in a later milestone" note.
+
+### Fixed (both found by verification, both easy to reintroduce)
+- **`[disabled]` on a reactive-form input does nothing.** The form directive owns the
+  disabled state, so the chat input stayed usable while chat was unavailable. Now
+  `form.disable()` / `form.enable()`.
+- **`(ngSubmit)` never fired on the chat composer.** It is an output of the form
+  directive, not a DOM event — a `<form>` with a bare `FormControl` and no `[formGroup]`
+  has no directive attached, so clicking *Ask* silently did nothing. Converted to a
+  `FormGroup` with `[formGroup]`, matching every other form in the app.
+
+### Verified
+26 automated browser checks against the live backend, all passing:
+- reports list renders; search reaches the API as a single debounced `q` (20 → 7); a row
+  opens the detail view
+- a real report renders 2 sections with genuine prose (493 and 371 chars) and 4 citations
+  each carrying its `[n]` marker
+- provenance shows `gemini-flash-latest`, 2449 tokens and the PII scan result
+- a degraded report is flagged as a fallback rather than a real analysis
+- version history lists both versions; opening v1 shows the snapshot notice and *Back to
+  current* clears it
+- chat probes `/openapi.json`, shows the honest "not enabled" notice, and disables input
+- **self-enable proven**: with the spec faked and the endpoint stubbed, the panel enabled
+  itself, sent `{"message":"…","history":[]}` — the exact specified contract — rendered
+  the answer with its supporting quote, and a follow-up replayed `history: user, assistant`
+- leadership can read a full report
+
+Production build clean, no warnings: initial 313.48 kB (91.05 kB transfer).
+
+### Known limitation (backend request #4)
+**Citation markers cannot be resolved to source text.** Citations carry
+`{claim, source: "[1]"}`, but the retrieved passages are never persisted — the retrieval
+step records only `{top_k, retrieved, top_score, documents_searched}`, and
+`RetrievalTool` writes sources to a working copy of `job.input` that is never saved. The
+UI shows each claim with its marker and states plainly that the marker cannot be expanded.
+
+### Not done yet (by design)
+Chat cannot answer anything until the backend endpoint exists. No report editing —
+`POST/PATCH/DELETE /reports` are analyst+admin but no write UI is built.
+
+---
+
 ## [Milestone 13 — Progress View] — 2026-08-02
 
 **Goal:** Real-time job progress with a progress bar and per-tool status indicators,
