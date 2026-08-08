@@ -1,4 +1,4 @@
-<p class="crumb"><a routerLink="/reports">← All reports</a></p>
+<p class="crumb no-print"><a routerLink="/reports">← All reports</a></p>
 
 @if (loading()) {
   <p class="muted">Loading report…</p>
@@ -20,13 +20,37 @@
         }
       </p>
     </div>
+
+    <div class="actions no-print">
+      @if (!editing()) {
+        @if (canEdit()) {
+          <button class="btn" type="button" (click)="startEditing()">Edit</button>
+        }
+        <button class="btn" type="button" (click)="printPdf()">Print / PDF</button>
+        <button class="btn" type="button" (click)="downloadDocx()" [disabled]="exporting()">
+          {{ exporting() ? 'Preparing…' : 'Download DOCX' }}
+        </button>
+      }
+    </div>
   </div>
 
+  @if (saved()) {
+    <p class="form-success no-print">Saved — a new version was recorded.</p>
+  }
+  @if (saveError()) {
+    <p class="form-error no-print">{{ saveError() }}</p>
+  }
+
   @if (viewingVersion(); as older) {
-    <p class="form-error version-note">
+    <p class="form-error version-note no-print">
       Showing version {{ older.version }} from {{ older.created_at | date: 'medium' }} —
       this is a historical snapshot.
       <button class="btn" type="button" (click)="showCurrent()">Back to current</button>
+      @if (canEdit()) {
+        <button class="btn" type="button" (click)="restore(older)" [disabled]="saving()">
+          Restore this version
+        </button>
+      }
     </p>
   }
 
@@ -38,7 +62,7 @@
   }
 
   @if (warnings().length) {
-    <div class="card warnings">
+    <div class="card warnings no-print">
       <h3>Warnings from the pipeline</h3>
       <ul>
         @for (warning of warnings(); track warning) {
@@ -48,55 +72,140 @@
     </div>
   }
 
-  <!-- The report itself -->
-  <article class="card report">
-    @if (shownSummary(); as summary) {
-      <section class="summary">
-        <h2>Summary</h2>
-        <p>{{ summary }}</p>
-      </section>
-    }
+  @if (editing()) {
+    <!-- Editable preview: same layout as the read view, fields in place. -->
+    <form class="card report editor" [formGroup]="editForm" (ngSubmit)="save()">
+      <div class="field">
+        <label for="title">Title</label>
+        <input id="title" type="text" formControlName="title" maxlength="500" />
+      </div>
 
-    @if (sections().length) {
-      @for (section of sections(); track $index) {
-        <section class="body-section">
-          <h2>{{ section.heading }}</h2>
-          <p>{{ section.body }}</p>
+      <div class="field">
+        <label for="summary">Summary</label>
+        <textarea id="summary" formControlName="summary" rows="4"></textarea>
+      </div>
+
+      <div class="field status-field">
+        <label for="status">Status</label>
+        <select id="status" formControlName="status">
+          @for (status of statuses; track status) {
+            <option [value]="status">{{ status }}</option>
+          }
+        </select>
+      </div>
+
+      <h2>Sections</h2>
+      <!--
+        Track by the control itself, NOT $index. With index tracking, reordering
+        leaves both the index and [formGroupName] unchanged from Angular's point
+        of view, so the inputs keep rendering the previous control's values — the
+        rows silently fail to move on screen even though the model reordered.
+      -->
+      <div formArrayName="sections">
+        @for (group of sectionForms.controls; track group) {
+          <fieldset class="section-edit" [formGroupName]="$index">
+            <div class="section-head">
+              <input
+                type="text"
+                formControlName="heading"
+                placeholder="Section heading"
+                aria-label="Section heading"
+              />
+              <span class="section-tools">
+                <button
+                  class="btn"
+                  type="button"
+                  (click)="moveSection($index, -1)"
+                  [disabled]="$first"
+                  aria-label="Move section up"
+                >↑</button>
+                <button
+                  class="btn"
+                  type="button"
+                  (click)="moveSection($index, 1)"
+                  [disabled]="$last"
+                  aria-label="Move section down"
+                >↓</button>
+                <button class="btn" type="button" (click)="removeSection($index)">Remove</button>
+              </span>
+            </div>
+            <textarea formControlName="body" rows="6" aria-label="Section body"></textarea>
+          </fieldset>
+        }
+      </div>
+
+      <button class="btn" type="button" (click)="addSection()">Add section</button>
+
+      @if (citations().length) {
+        <p class="field-hint">
+          {{ citations().length }} citations are kept as they are — they are the agent's
+          evidence trail, not prose to rewrite.
+        </p>
+      }
+
+      <div class="editor-actions">
+        <button class="btn btn-primary" type="submit" [disabled]="saving()">
+          {{ saving() ? 'Saving…' : 'Save changes' }}
+        </button>
+        <button class="btn" type="button" (click)="cancelEditing()" [disabled]="saving()">
+          Cancel
+        </button>
+        <span class="muted">Saving records a new version.</span>
+      </div>
+    </form>
+  } @else {
+    <!-- Read-only preview: this is what prints and what exports. -->
+    <article class="card report">
+      @if (shownSummary(); as summary) {
+        <section class="summary">
+          <h2>Summary</h2>
+          <p>{{ summary }}</p>
         </section>
       }
-    } @else {
-      <p class="muted">This report has no sections.</p>
-    }
 
-    @if (citations().length) {
-      <section class="citations">
-        <h2>Citations</h2>
-        <p class="muted small">
-          Each claim the agent made, with the source marker it cited. The marker cannot
-          be expanded to the original passage — the backend does not persist the
-          retrieved text.
-        </p>
-        <ol>
-          @for (citation of citations(); track $index) {
-            <li>
-              <span class="claim">{{ citation.claim }}</span>
-              @if (citation.source) {
-                <span class="marker">{{ citation.source }}</span>
-              }
-            </li>
-          }
-        </ol>
-      </section>
-    } @else {
-      <section class="citations">
-        <h2>Citations</h2>
-        <p class="muted">No citations were recorded for this report.</p>
-      </section>
-    }
-  </article>
+      @if (sections().length) {
+        @for (section of sections(); track $index) {
+          <section class="body-section">
+            <h2>{{ section.heading }}</h2>
+            <p>{{ section.body }}</p>
+          </section>
+        }
+      } @else {
+        <p class="muted">This report has no sections.</p>
+      }
+
+      @if (citations().length) {
+        <section class="citations">
+          <h2>Citations</h2>
+          <p class="muted small no-print">
+            Each claim the agent made, with the source marker it cited. The marker cannot
+            be expanded to the original passage — the backend does not persist the
+            retrieved text.
+          </p>
+          <ol>
+            @for (citation of citations(); track $index) {
+              <li>
+                <span class="claim">{{ citation.claim }}</span>
+                @if (citation.source) {
+                  <span class="marker">{{ citation.source }}</span>
+                }
+              </li>
+            }
+          </ol>
+        </section>
+      } @else {
+        <section class="citations">
+          <h2>Citations</h2>
+          <p class="muted">No citations were recorded for this report.</p>
+        </section>
+      }
+    </article>
+  }
 
   <!-- Chat -->
-  <app-report-chat [report]="report" />
+  <div class="no-print">
+    <app-report-chat [report]="report" />
+  </div>
 
   <!-- Provenance + history -->
   <div class="columns">
@@ -131,7 +240,7 @@
       </dl>
     </section>
 
-    <section class="card">
+    <section class="card no-print">
       <h2>Version history</h2>
       @if (versions().length === 0) {
         <p class="muted">No earlier versions — this is the first.</p>
@@ -153,8 +262,8 @@
           }
         </ul>
         <p class="field-hint">
-          Snapshots taken each time the report was rewritten — a retried job bumps the
-          version.
+          A snapshot is recorded every time the report is saved — including edits made
+          here and reruns of the job.
         </p>
       }
     </section>

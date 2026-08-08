@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
-import { Page, Report, ReportQuery, ReportVersion } from '../../core/models';
+import { Page, Report, ReportQuery, ReportUpdate, ReportVersion } from '../../core/models';
 import { ApiService } from '../../core/services/api.service';
 
 /**
@@ -27,6 +27,16 @@ export class ReportsService {
 
   get(id: string): Observable<Report> {
     return this.api.get<Report>(`/reports/${id}`);
+  }
+
+  /**
+   * Edit a report. Analyst + admin only (leadership gets 403).
+   *
+   * Every PATCH snapshots a new version server-side — even a status-only
+   * change — so callers should refresh the version list after saving.
+   */
+  update(id: string, payload: ReportUpdate): Observable<Report> {
+    return this.api.patch<Report>(`/reports/${id}`, payload);
   }
 
   versions(id: string): Observable<ReportVersion[]> {

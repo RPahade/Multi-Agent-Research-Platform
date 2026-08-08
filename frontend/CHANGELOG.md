@@ -7,6 +7,72 @@ Backend history lives in the repo-root `CHANGELOG.md`.
 
 ---
 
+## [Milestone 15 — Preview & Download] — 2026-08-03
+
+**Goal:** Editable report preview, DOCX and PDF export, and version handling.
+
+### Decisions (confirmed with user)
+- **Export is client-side, both formats.** The API has no export endpoint (27 paths, no
+  export/download/docx/pdf). Rather than block the milestone, DOCX is generated in the
+  browser as **genuine OOXML** with the `docx` library and PDF uses the browser's own
+  print-to-PDF behind a print stylesheet. Both produce real files, so nothing misleading
+  ships. Cost: one dependency, lazily loaded.
+
+### Added
+- **Editable preview** on `/reports/:id` — an *Edit* toggle (analyst + admin only) that
+  turns the preview into a form over the same layout: title, summary, status, and a
+  `FormArray` of sections with add / remove / reorder. Citations remain read-only, being
+  the agent's evidence trail rather than prose.
+- **`report-export.service.ts`** — `downloadDocx()` builds a real .docx (title, status
+  line, summary, sections, citations, provenance) and `printPdf()` calls the browser's
+  print. The `docx` library is imported **lazily**, so it lands in its own ~411 kB chunk
+  and the initial bundle grew ~1 kB.
+- **Print stylesheet** in `styles.scss` — a `.no-print` convention plus rules that strip
+  the shell, chat, controls and version history, flatten cards, and set sensible
+  orphans/widows and page-break behaviour, so what prints is the report itself.
+- **`ReportsService.update()`**, and *Restore this version*, which re-saves an old
+  snapshot as a **new** version rather than rewriting history.
+
+### Fixed
+- **Section reordering did not update on screen.** With `track $index` on the sections
+  `@for` plus `[formGroupName]="$index"`, moving a control leaves both unchanged from
+  Angular's point of view, so the inputs kept rendering the previous control's values —
+  the model reordered correctly but the rows appeared not to move. Now `track group`.
+  Caught by verification, not by the compiler.
+
+### Notes on the data model (verified, worth knowing)
+- **`title` and `summary` live both as columns and inside `content` JSON, and drift.**
+  Patching `content.summary` alone left the `summary` column untouched, so the report
+  view (which reads columns) disagreed with the body it rendered. The editor writes both.
+- **The save spreads existing `content`**, so `citations`, `warnings`, `compliance` and
+  `generated_by` survive an edit.
+- **Versioning is entirely server-side.** `PATCH /reports/{id}` snapshots a new version —
+  confirmed v1 → v2 → v3, including for a status-only change. The UI just refreshes the
+  list after saving.
+
+### Verified
+29 automated browser checks against the live backend, all passing:
+- edit mode pre-fills; sections add, remove and **reorder** on screen and persist
+- saving bumped the version and updated **both** columns and `content`; citations and
+  provenance survived
+- *Restore* wrote an old snapshot back as a new version with history intact
+- **DOCX**: real file downloaded — `PK` magic bytes, a genuine `word/document.xml`,
+  8.7 kB, containing title, status line, summary, both sections, citations, provenance
+- **Print**: stylesheet strips sidebar, topbar, chat, actions and history while the
+  report still renders; `page.pdf()` produced a valid 40 kB PDF
+- leadership sees no *Edit* but keeps both exports, and the backend refuses its PATCH
+  with **403**
+
+Production build clean, no warnings: initial 314.52 kB (91.98 kB transfer).
+
+### Known issue (pre-existing, unrelated)
+`npm audit` reports 6 high-severity advisories, **all in Angular packages**
+(`@angular/core` ≤ 20.3.26, XSS via event-handler attributes in `@angular/compiler`).
+`docx` contributes none. `npm audit fix` patches within the existing `^20.3.0` range;
+left alone so as not to change the lockfile mid-milestone.
+
+---
+
 ## [Milestone 14 — Report chat wired to the live endpoint] — 2026-08-03
 
 The backend delivered `POST /api/v1/reports/{report_id}/chat`, closing the only blocker.

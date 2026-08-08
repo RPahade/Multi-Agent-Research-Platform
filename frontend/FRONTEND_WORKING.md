@@ -46,8 +46,8 @@ background job and produces a cited report. Three roles — `admin` (governance)
 | 12 | Research Job Form — topic, upload, configuration, validation | ✅ done |
 | 13 | Progress View — live SSE progress, per-tool status, cancel | ✅ done |
 | 14 | Report View — content, citations, versions, grounded chat | ✅ done (chat live) |
-| 15 | *to be confirmed* | next |
-| 16 | *to be confirmed* | planned |
+| 15 | Preview & Download — editable preview, DOCX/PDF export, versioning | ✅ done |
+| 16 | *to be confirmed* | next |
 
 *(The user supplies each milestone's definition; do not assume the remaining titles.
 Still unbuilt: a documents management screen, and the users/agents/tools CRUD write
@@ -65,7 +65,7 @@ screens.)*
 
 ---
 
-## 4. Current state — what EXISTS right now (after Milestone 14)
+## 4. Current state — what EXISTS right now (after Milestone 15)
 
 ### Folder structure
 
@@ -109,8 +109,9 @@ frontend/
         jobs/                  # JobsPage (list), JobDetailPage (live progress),
                                # NewJobPage, document-upload, pipeline-preview,
                                # jobs.service.ts, job-stream.service.ts
-        reports/               # ReportsPage (list), ReportDetailPage, report-chat,
-                               # reports.service.ts, report-chat.service.ts
+        reports/               # ReportsPage (list), ReportDetailPage (preview +
+                               # editor), report-chat, reports.service.ts,
+                               # report-chat.service.ts, report-export.service.ts
         agents/ documents/                   # placeholder pages + their API services
         tools/ forbidden/ not-found/
 ```
@@ -325,6 +326,42 @@ from a send as "endpoint missing", because 404 now means *unknown report*.
 `section`, not a `[n]` marker — so chat citations do not line up with the report's own
 numbered list. The UI renders whatever fields are present.
 
+### Editable preview & export (Milestone 15)
+
+**Editing** is an *Edit* toggle on `/reports/:id`, shown to analyst + admin only
+(leadership gets 403 from the backend regardless). It turns the preview into a form over
+the same layout: title, summary, status, and a `FormArray` of sections with add, remove
+and reorder. **Citations stay read-only** — they are the agent's evidence trail, not
+prose to rewrite.
+
+⚠️ **`title` and `summary` exist BOTH as columns and inside `content` JSON, and they
+drift.** Verified: patching `content.summary` alone left the stored `summary` column
+untouched, so the report view (which reads the columns) disagreed with the body it
+rendered. **Save writes both.** The save also spreads the existing `content`, so
+`citations`, `warnings`, `compliance` and `generated_by` survive an edit.
+
+**Versioning is entirely server-side.** `PATCH /reports/{id}` is documented as
+"snapshots a new version" and does — verified v1 → v2 → v3, including for a status-only
+change. So the UI just refreshes the version list after saving. *Restore this version*
+re-saves an old snapshot as a **new** version rather than rewriting history.
+
+**Export is client-side — the API has no export endpoint** (27 paths, no
+export/download/docx/pdf):
+
+- **DOCX** via the `docx` library in `report-export.service.ts` — genuine OOXML, not an
+  HTML file with a renamed extension (verified: `PK` magic bytes and a real
+  `word/document.xml`). The library is **imported lazily** (`await import('docx')`), so
+  it sits in its own ~411 kB chunk and the initial bundle grew only ~1 kB.
+- **PDF** via the browser's own print-to-PDF, driven by a print stylesheet in
+  `styles.scss`. Anything that is chrome or interaction carries `.no-print`; the shell,
+  chat panel, controls and version history are stripped, leaving the report itself.
+
+🐛 **Bug worth not reintroducing:** in the sections `@for`, **track the control, not
+`$index`**. With `track $index` plus `[formGroupName]="$index"`, reordering leaves both
+unchanged from Angular's perspective, so the inputs keep rendering the previous control's
+values — the rows silently fail to move on screen even though the model reordered
+correctly. Caught by verification; `track group` fixes it.
+
 ⚠️ **Citation markers are not resolvable.** Citations carry `{claim, source: "[1]"}` but
 the backend never persists the retrieved passages — the retrieval step's output is only
 `{top_k, retrieved, top_score, documents_searched}`. The UI shows each claim with its
@@ -510,6 +547,21 @@ including a **real end-to-end research run**:
 - Each question is a separate `200` call to the live endpoint.
 - Leadership can chat and gets answers.
 
+**Milestone 15** — 29 automated browser checks against the live backend, all passing:
+
+- Edit mode pre-fills from the report; sections load as editable rows; add, remove and
+  **reorder** all work on screen and persist.
+- Saving bumped v1 → v2 and updated **both** the `title`/`summary` columns *and*
+  `content.title`/`content.summary`; citations and `generated_by` survived untouched.
+- *Restore* wrote an old snapshot back as **v3** — history preserved (3 snapshots for
+  v3), not rewritten.
+- **DOCX**: a real file downloaded (`PK` magic, `word/document.xml`, 8.7 kB) containing
+  the title, status line, summary, both sections, citations and provenance.
+- **Print**: the stylesheet strips sidebar, topbar, chat, actions and version history
+  while the report still renders; `page.pdf()` produced a valid 40 kB PDF.
+- Leadership sees **no Edit** but keeps both export buttons, and the backend refuses a
+  leadership PATCH with **403**.
+
 ---
 
 ## 7. Notes, gotchas & things to know
@@ -550,7 +602,12 @@ including a **real end-to-end research run**:
 
 ## 8. Next steps
 
-**Milestone 15 is not yet defined** — the user supplies each milestone. These are the
+**Known issue, unrelated to any milestone:** `npm audit` reports 6 high-severity
+advisories, all in Angular packages (`@angular/core` ≤ 20.3.26 — XSS via event-handler
+attributes in `@angular/compiler`). `docx` adds none. `npm audit fix` patches within the
+existing `^20.3.0` range; not done yet because it touches the lockfile mid-milestone.
+
+**Milestone 16 is not yet defined** — the user supplies each milestone. These are the
 pieces still missing, with the groundwork already in place:
 
 - **Documents screen** — `documents.service.ts` has list/get/chunks/upload; a management

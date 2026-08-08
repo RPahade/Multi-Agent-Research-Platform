@@ -221,6 +221,65 @@ th.sortable:hover {
   color: var(--color-text);
 }
 
+/* --- Print ------------------------------------------------------------
+   Used by the report's "Print / PDF" action: the browser's own print-to-PDF
+   is the export, so what remains on the page IS the exported document.
+   Mark anything that is chrome or interaction with .no-print.
+   ---------------------------------------------------------------------- */
+
+@media print {
+  .no-print,
+  .sidebar,
+  .topbar {
+    display: none !important;
+  }
+
+  /* The shell's layout only exists for the screen. */
+  .shell,
+  .main,
+  .content {
+    display: block !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    min-height: 0 !important;
+  }
+
+  body {
+    background: #fff;
+    font-size: 11pt;
+  }
+
+  .card {
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 0 12pt !important;
+    max-width: none !important;
+  }
+
+  /* Links print as plain text — a blue underline means nothing on paper. */
+  a {
+    color: inherit !important;
+    text-decoration: none !important;
+  }
+
+  h1,
+  h2,
+  h3 {
+    break-after: avoid;
+  }
+
+  p,
+  li {
+    orphans: 3;
+    widows: 3;
+  }
+
+  .report p {
+    max-width: none;
+  }
+}
+
 /* --- Forms ------------------------------------------------------------ */
 
 .field {
