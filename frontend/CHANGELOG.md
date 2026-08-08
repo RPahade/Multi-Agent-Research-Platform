@@ -7,6 +7,53 @@ Backend history lives in the repo-root `CHANGELOG.md`.
 
 ---
 
+## [Documents screen] — 2026-08-08
+
+Not part of a numbered milestone — the last placeholder screen, built after M16 on the
+user's suggestion. **No backend change required**; it uses only endpoints that already
+existed.
+
+### Added
+- **`features/documents/documents-page`** replacing the placeholder:
+  - **List** with status filter, debounced search, pagination, and per-row size, chunk
+    count, page count and upload date. Documents you uploaded are marked "you"
+    (`uploaded_by` is a bare UUID and non-admins cannot resolve names, so it is compared
+    against the signed-in id rather than displayed raw).
+  - **Chunk inspector** — the centrepiece. Expanding a document loads
+    `GET /documents/{id}/chunks` and shows the exact passages retrieval searches over,
+    with index, page and character count. Nothing else in the app exposed these, and
+    report citations cannot be expanded to their source (backend request #4), so this is
+    the only way to read the evidence a report was grounded in.
+  - **Failed ingestion is finally visible** — an unsupported file uploads successfully
+    (201) and only fails later during ingestion; the document's `error` is now shown.
+  - **Ingestion job link** per row, reusing the M13 live progress view.
+  - **Upload and delete** for analyst + admin, read-only for leadership. Delete warns
+    that it is not reversible — there is no re-ingest endpoint, so recovery means
+    uploading the file again.
+- **`features/documents/upload-rules.ts`** — the parser's allowlist, size cap and
+  validation extracted into one place, now shared with the research form's picker so the
+  two can never disagree about what is accepted.
+
+### Verified
+20 automated browser checks against the live backend, all passing:
+- list, paginator total, and per-row metadata all match the API
+- expanding a document showed **4 real passages** of contract text; the count matched the
+  API for that document, and each showed its index and character count
+- status filter and search matched API-reported totals
+- an unsupported `.zip` was rejected in the browser and **never sent**
+- a real upload was followed through to `ingested`, appeared in the list (4 → 5), and
+  deleting removed it (5 → 4)
+- leadership can read and inspect passages but gets no upload control and no delete button
+
+Production build clean, no warnings: initial 314.79 kB (91.27 kB transfer).
+
+**Note for whoever runs the dev server:** writing a component's `.ts` before its `.html`
+makes the dev server's rebuild fail (`NG2008: Could not find template file`) and it will
+keep serving the last good bundle — the page silently looks stale. Check the serve log
+before assuming the code is wrong.
+
+---
+
 ## [Milestone 16 — Admin Panel] — 2026-08-08
 
 **Goal:** Admin capabilities for monitoring and configuration — tool registry and quotas,

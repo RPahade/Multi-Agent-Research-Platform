@@ -8,13 +8,11 @@ import { apiErrorMessage } from '../../core/services/api-error';
 import { EmptyState } from '../../shared/components/empty-state/empty-state';
 import { StatusBadge } from '../../shared/components/status-badge/status-badge';
 import { DocumentsService } from '../documents/documents.service';
-
-/**
- * What the backend's parser can actually read. An unsupported type still
- * uploads successfully and only fails later, during ingestion — so checking it
- * here turns a delayed, confusing failure into an immediate message.
- */
-const ALLOWED_EXTENSIONS = ['.pdf', '.docx', '.txt', '.md', '.csv', '.json'];
+import {
+  ACCEPT_ATTRIBUTE,
+  ALLOWED_EXTENSIONS,
+  validateUpload,
+} from '../documents/upload-rules';
 
 /** Give up watching an ingestion after roughly 90 seconds. */
 const POLL_INTERVAL_MS = 1500;
@@ -52,7 +50,7 @@ export class DocumentUpload implements OnInit, OnDestroy {
 
   protected readonly maxBytes = MAX_UPLOAD_BYTES;
   protected readonly allowedTypes = ALLOWED_EXTENSIONS.join(', ');
-  protected readonly accept = ALLOWED_EXTENSIONS.join(',');
+  protected readonly accept = ACCEPT_ATTRIBUTE;
 
   private pollSubscription?: Subscription;
 
@@ -81,7 +79,7 @@ export class DocumentUpload implements OnInit, OnDestroy {
     input.value = ''; // let the same file be picked again after a failure
 
     for (const file of files) {
-      const problem = validate(file);
+      const problem = validateUpload(file);
       if (problem) {
         this.addUpload({ name: file.name, size: file.size, status: 'failed', percent: 0, error: problem });
       } else {
@@ -190,21 +188,6 @@ export class DocumentUpload implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.pollSubscription?.unsubscribe();
   }
-}
-
-/** Rejects a file the backend could not parse, before wasting an upload on it. */
-function validate(file: File): string | null {
-  if (file.size === 0) {
-    return 'File is empty.';
-  }
-  if (file.size > MAX_UPLOAD_BYTES) {
-    return `File is larger than ${MAX_UPLOAD_BYTES / 1024 / 1024} MB.`;
-  }
-  const extension = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
-  if (!ALLOWED_EXTENSIONS.includes(extension)) {
-    return `Unsupported file type. Allowed: ${ALLOWED_EXTENSIONS.join(', ')}`;
-  }
-  return null;
 }
 
 /** Polls a document until it stops being uploaded/processing, or we time out. */

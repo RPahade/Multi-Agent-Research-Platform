@@ -64,4 +64,14 @@ export class DocumentsService {
   chunks(id: string, page = 1, size = 20): Observable<Page<DocumentChunk>> {
     return this.api.getPage<DocumentChunk>(`/documents/${id}/chunks`, { page, size });
   }
+
+  /**
+   * Soft delete. Analyst + admin only.
+   *
+   * There is no re-ingest endpoint, so this is not reversible from the UI —
+   * restoring a document means uploading the file again.
+   */
+  remove(id: string): Observable<void> {
+    return this.api.delete<void>(`/documents/${id}`);
+  }
 }

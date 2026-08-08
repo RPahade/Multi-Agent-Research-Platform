@@ -1,0 +1,226 @@
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.head h1 {
+  margin-bottom: var(--space-1);
+}
+
+.head p {
+  margin: 0;
+  max-width: 60ch;
+}
+
+/* The real file input is hidden; the styled span is what gets clicked. */
+.picker {
+  cursor: pointer;
+}
+
+.picker input[type='file'] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.picker .btn {
+  pointer-events: none;
+}
+
+.picker:focus-within .btn {
+  outline: 2px solid var(--color-primary);
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: var(--space-4) 0;
+}
+
+.filters input,
+.filters select {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 14px;
+}
+
+.filters input {
+  min-width: 240px;
+}
+
+/* --- uploads --- */
+
+.uploads {
+  margin-top: var(--space-4);
+}
+
+.uploads-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-2);
+}
+
+.uploads-head h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.uploads ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.uploads li {
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.uploads li:first-child {
+  border-top: none;
+}
+
+.progress {
+  height: 5px;
+  margin-top: var(--space-1);
+  border-radius: 999px;
+  background: var(--color-border);
+}
+
+.progress .bar {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--color-primary);
+  transition: width 0.15s linear;
+}
+
+/* --- document list --- */
+
+.documents {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.doc {
+  border-top: 1px solid var(--color-border);
+}
+
+.doc:first-child {
+  border-top: none;
+}
+
+.doc-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* The row is the expander; the link and delete sit outside the button. */
+.expand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-3) 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.expand:hover {
+  background: var(--color-primary-soft);
+}
+
+.marker {
+  width: 12px;
+  color: var(--color-text-muted);
+}
+
+.detail {
+  min-width: 0;
+}
+
+.line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.name {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meta {
+  display: block;
+  font-size: 13px;
+}
+
+.small {
+  font-size: 13px;
+}
+
+.doc-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: var(--space-1);
+}
+
+.doc-actions .btn {
+  padding: var(--space-1) var(--space-2);
+  font-size: 13px;
+}
+
+.doc-error {
+  margin: 0 0 var(--space-3) 24px;
+  color: var(--color-danger);
+  font-size: 13px;
+}
+
+/* --- chunk inspector --- */
+
+.chunks {
+  padding: 0 0 var(--space-4) 24px;
+}
+
+.chunk-list {
+  margin: var(--space-2) 0 0;
+  padding-left: var(--space-5);
+}
+
+.chunk-list li {
+  margin-bottom: var(--space-3);
+}
+
+.chunk-meta {
+  font-size: 12px;
+}
+
+.chunk-text {
+  margin: var(--space-1) 0 0;
+  padding: var(--space-2) var(--space-3);
+  max-width: 80ch;
+  border-left: 2px solid var(--color-border);
+  background: var(--color-bg);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  white-space: pre-wrap;
+}

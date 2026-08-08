@@ -116,7 +116,8 @@ frontend/
                                # editor), report-chat, reports.service.ts,
                                # report-chat.service.ts, report-export.service.ts
         agents/ tools/         # list + CRUD pages and their API services
-        documents/             # documents.service.ts; the page is still a placeholder
+        documents/             # DocumentsPage (list + chunk inspector),
+                               # documents.service.ts, upload-rules.ts
         forbidden/ not-found/
 ```
 
@@ -153,7 +154,7 @@ requires a signed-in user (`authGuard` on the parent route).
 | `/agents` | `AgentsPage` | auth | **real** — CRUD, writes admin-only (M16) |
 | `/tools` | `ToolsPage` | auth | **real** — registry CRUD, writes admin-only (M16) |
 | `/admin` | `AdminPage` | auth + `roleGuard(['admin'])` | **real** — monitoring (M16) |
-| `/documents` | `DocumentsPage` | auth | placeholder — the only one left |
+| `/documents` | `DocumentsPage` | auth | **real** — list, chunk inspector, upload, delete |
 | `/forbidden` | `ForbiddenPage` | auth | real |
 | `**` | `NotFoundPage` | — | real |
 
@@ -629,12 +630,9 @@ advisories, all in Angular packages (`@angular/core` ≤ 20.3.26 — XSS via eve
 attributes in `@angular/compiler`). `docx` adds none. `npm audit fix` patches within the
 existing `^20.3.0` range; not done yet because it touches the lockfile mid-milestone.
 
-**All 8 frontend milestones are complete.** What remains is optional, not planned work:
+**All 8 frontend milestones are complete, and no placeholder screens remain.**
+What follows is optional, not planned work:
 
-- **Documents screen** — the only feature area without its own management page.
-  `documents.service.ts` already has list/get/chunks/upload (upload is used by the
-  research form), so a list with a chunk inspector and delete would be a small addition.
-  Documents are otherwise reachable through the research form and the dashboard.
 - **Quotas** — deliberately not built; there is no backend concept to drive them
   (`../BACKEND_CHANGES_REQUIRED_FOR_FE.md` §12).
 - **Open backend requests** — the honesty notes in the UI can be deleted as each lands:

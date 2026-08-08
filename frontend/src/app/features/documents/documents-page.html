@@ -1,0 +1,160 @@
+<div class="head">
+  <div>
+    <h1>Documents</h1>
+    <p class="muted">
+      The source material the agent searches. Expand a document to read the exact
+      passages retrieval works over.
+    </p>
+  </div>
+
+  @if (canWrite()) {
+    <label class="picker">
+      <input type="file" multiple [accept]="accept" (change)="onFilesPicked($event)" />
+      <span class="btn btn-primary">Upload documents</span>
+    </label>
+  }
+</div>
+
+@if (canWrite()) {
+  <p class="field-hint">{{ allowedTypes }} · up to 25 MB each</p>
+}
+
+@if (notice()) {
+  <p class="form-success">{{ notice() }}</p>
+}
+@if (error()) {
+  <p class="form-error">{{ error() }}</p>
+}
+
+<!-- In-flight uploads -->
+@if (uploads().length) {
+  <section class="card uploads">
+    <div class="uploads-head">
+      <h2>Uploads</h2>
+      <button class="btn" type="button" (click)="clearUploads()">Clear</button>
+    </div>
+    <ul>
+      @for (upload of uploads(); track upload.name) {
+        <li>
+          <div class="line">
+            <span class="name">{{ upload.name }}</span>
+            <app-status-badge
+              [status]="upload.status === 'done' ? 'ingested' : upload.status === 'ingesting' ? 'processing' : upload.status"
+            />
+          </div>
+          @if (upload.status === 'uploading') {
+            <div class="progress"><span class="bar" [style.width.%]="upload.percent"></span></div>
+          }
+          @if (upload.status === 'ingesting') {
+            <span class="muted small">Parsing, chunking and embedding…</span>
+          }
+          @if (upload.error) {
+            <span class="field-error">{{ upload.error }}</span>
+          }
+        </li>
+      }
+    </ul>
+  </section>
+}
+
+<!-- Filters -->
+<div class="filters">
+  <input type="search" [formControl]="qControl" placeholder="Search by filename…" aria-label="Search documents" />
+  <select [formControl]="statusControl" aria-label="Filter by status">
+    <option value="">All statuses</option>
+    @for (status of statuses; track status) {
+      <option [value]="status">{{ status }}</option>
+    }
+  </select>
+</div>
+
+@if (loading()) {
+  <p class="muted">Loading…</p>
+} @else if (items().length === 0) {
+  <app-empty-state message="No documents match these filters." />
+} @else {
+  <ul class="documents">
+    @for (doc of items(); track doc.id) {
+      <li class="doc">
+        <div class="doc-row">
+          <button class="expand" type="button" (click)="toggleChunks(doc)">
+            <span class="marker">{{ expandedId() === doc.id ? '▾' : '▸' }}</span>
+
+            <span class="detail">
+              <span class="line">
+                <span class="name">{{ doc.title || doc.filename }}</span>
+                <app-status-badge [status]="doc.status" />
+                @if (isMine(doc)) {
+                  <span class="badge">you</span>
+                }
+              </span>
+              <span class="meta muted">
+                {{ formatBytes(doc.size_bytes) }}
+                · {{ doc.chunk_count }} {{ doc.chunk_count === 1 ? 'chunk' : 'chunks' }}
+                @if (doc.page_count) {
+                  · {{ doc.page_count }} pages
+                }
+                · {{ doc.created_at | date: 'short' }}
+              </span>
+            </span>
+          </button>
+
+          <span class="doc-actions">
+            @if (doc.job_id) {
+              <a class="btn" [routerLink]="['/jobs', doc.job_id]">Ingestion job</a>
+            }
+            @if (canWrite()) {
+              <button class="btn" type="button" (click)="remove(doc)">Delete</button>
+            }
+          </span>
+        </div>
+
+        <!-- A failed ingestion is only visible here; the upload itself succeeded. -->
+        @if (doc.error) {
+          <p class="doc-error">{{ doc.error }}</p>
+        }
+
+        @if (expandedId() === doc.id) {
+          <div class="chunks">
+            @if (chunksLoading()) {
+              <p class="muted">Loading passages…</p>
+            } @else if (chunksFor(doc.id).length === 0) {
+              <p class="muted">
+                No passages stored — this document has not been ingested successfully, so
+                retrieval cannot search it.
+              </p>
+            } @else {
+              <p class="muted small">
+                Showing {{ chunksFor(doc.id).length }} of {{ chunkTotal(doc.id) }} passages.
+                These are exactly what the agent searches.
+              </p>
+              <ol class="chunk-list">
+                @for (chunk of chunksFor(doc.id); track chunk.id) {
+                  <li>
+                    <span class="chunk-meta muted">
+                      #{{ chunk.chunk_index }}
+                      @if (chunk.page_number) {
+                        · page {{ chunk.page_number }}
+                      }
+                      · {{ chunk.char_count }} chars
+                    </span>
+                    <p class="chunk-text">{{ chunk.text }}</p>
+                  </li>
+                }
+              </ol>
+            }
+          </div>
+        }
+      </li>
+    }
+  </ul>
+}
+
+<app-paginator
+  [page]="page()"
+  [size]="size()"
+  [total]="total()"
+  [pages]="pages()"
+  (pageChange)="onPage($event)"
+  (sizeChange)="onSize($event)"
+/>
