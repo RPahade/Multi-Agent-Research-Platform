@@ -1,0 +1,170 @@
+<div class="head">
+  <div>
+    <h1>Tool registry</h1>
+    <p class="muted">The catalogue of tools the platform knows about.</p>
+  </div>
+  @if (canWrite()) {
+    <button class="btn btn-primary" type="button" (click)="startCreate()">Add tool</button>
+  }
+</div>
+
+<!--
+  Being straight about what this screen does and does not control, rather than
+  implying the toggles change agent behaviour.
+-->
+<p class="field-hint registry-note">
+  These rows are a <strong>catalogue</strong>. The agent pipeline is fixed in the backend
+  and does not read this table, so enabling or disabling a tool here does not change what
+  a research job runs. Tracked as request #2 in
+  <code>BACKEND_CHANGES_REQUIRED_FOR_FE.md</code>.
+</p>
+
+@if (notice()) {
+  <p class="form-success">{{ notice() }}</p>
+}
+@if (error()) {
+  <p class="form-error">{{ error() }}</p>
+}
+
+<!-- Create / edit -->
+@if (editing()) {
+  <form class="card editor" [formGroup]="form" (ngSubmit)="save()">
+    <h2>{{ isNew() ? 'Add a tool' : 'Edit tool' }}</h2>
+
+    @if (saveError()) {
+      <p class="form-error">{{ saveError() }}</p>
+    }
+
+    <div class="grid">
+      <div class="field">
+        <label for="key">Key</label>
+        <input id="key" type="text" formControlName="key" maxlength="100" />
+        <span class="field-hint">
+          {{ isNew() ? 'Stable machine name, e.g. web_research.' : 'Immutable once created.' }}
+        </span>
+        @if (showError('key')) {
+          <span class="field-error">A key is required.</span>
+        }
+      </div>
+
+      <div class="field">
+        <label for="name">Name</label>
+        <input id="name" type="text" formControlName="name" maxlength="255" />
+        @if (showError('name')) {
+          <span class="field-error">A name is required.</span>
+        }
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="description">Description</label>
+      <input id="description" type="text" formControlName="description" />
+    </div>
+
+    <div class="grid">
+      <div class="field">
+        <label for="category">Category</label>
+        <select id="category" formControlName="category">
+          @for (category of categories; track category) {
+            <option [value]="category">{{ category }}</option>
+          }
+        </select>
+      </div>
+
+      <div class="field checkbox">
+        <label>
+          <input type="checkbox" formControlName="enabled" />
+          Enabled
+        </label>
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="config">Config (JSON)</label>
+      <textarea id="config" formControlName="config" rows="5" spellcheck="false"></textarea>
+      @if (showError('config')) {
+        <span class="field-error">{{ form.controls.config.errors?.['json'] }}</span>
+      }
+    </div>
+
+    <div class="editor-actions">
+      <button class="btn btn-primary" type="submit" [disabled]="saving()">
+        {{ saving() ? 'Saving…' : 'Save' }}
+      </button>
+      <button class="btn" type="button" (click)="cancel()" [disabled]="saving()">Cancel</button>
+    </div>
+  </form>
+}
+
+<!-- Filters -->
+<div class="filters">
+  <input type="search" [formControl]="qControl" placeholder="Search tools…" aria-label="Search tools" />
+  <select [formControl]="categoryControl" aria-label="Filter by category">
+    <option value="">All categories</option>
+    @for (category of categories; track category) {
+      <option [value]="category">{{ category }}</option>
+    }
+  </select>
+  <select [formControl]="enabledControl" aria-label="Filter by enabled">
+    <option value="">Enabled and disabled</option>
+    <option value="true">Enabled only</option>
+    <option value="false">Disabled only</option>
+  </select>
+</div>
+
+@if (loading()) {
+  <p class="muted">Loading…</p>
+} @else if (items().length === 0) {
+  <app-empty-state message="No tools match these filters." />
+} @else {
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Key</th>
+          <th>Category</th>
+          <th>Status</th>
+          <th class="num">Version</th>
+          @if (canWrite()) {
+            <th>Actions</th>
+          }
+        </tr>
+      </thead>
+      <tbody>
+        @for (tool of items(); track tool.id) {
+          <tr>
+            <td>
+              <span class="name">{{ tool.name }}</span>
+              @if (tool.description) {
+                <span class="muted desc">{{ tool.description }}</span>
+              }
+            </td>
+            <td><code>{{ tool.key }}</code></td>
+            <td>{{ tool.category }}</td>
+            <td><app-status-badge [status]="tool.enabled ? 'enabled' : 'disabled'" /></td>
+            <td class="num">{{ tool.version }}</td>
+            @if (canWrite()) {
+              <td class="actions-cell">
+                <button class="btn" type="button" (click)="startEdit(tool)">Edit</button>
+                <button class="btn" type="button" (click)="toggleEnabled(tool)">
+                  {{ tool.enabled ? 'Disable' : 'Enable' }}
+                </button>
+                <button class="btn" type="button" (click)="remove(tool)">Delete</button>
+              </td>
+            }
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}
+
+<app-paginator
+  [page]="page()"
+  [size]="size()"
+  [total]="total()"
+  [pages]="pages()"
+  (pageChange)="onPage($event)"
+  (sizeChange)="onSize($event)"
+/>

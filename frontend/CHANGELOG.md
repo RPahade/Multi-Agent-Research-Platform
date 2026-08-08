@@ -7,6 +7,73 @@ Backend history lives in the repo-root `CHANGELOG.md`.
 
 ---
 
+## [Milestone 16 — Admin Panel] — 2026-08-08
+
+**Goal:** Admin capabilities for monitoring and configuration — tool registry and quotas,
+monitoring metrics, and role-based access for admin features.
+
+**This is the final frontend milestone. No placeholder screens remain.**
+
+### Decisions (confirmed with user)
+- **Quotas were deliberately not built.** Verified there is no quota concept anywhere in
+  the backend — no `quota`, `rate_limit`, `max_calls` or `daily_limit` in any schema,
+  model, service or route, and no usage counters. A quota field the UI stores but nothing
+  enforces would be a control that silently does nothing, the same trap as the tool
+  `enabled` flag and `agent_id`. Recorded as request #12.
+- **All remaining placeholders were filled in** — Users, Agents and Tools — so the final
+  build has no dead navigation.
+
+### Added
+- **`features/admin/admin-page`** (`/admin`, `roleGuard(['admin'])`) — headline tiles
+  (jobs, **error rate**, reports, users), a job breakdown by status and type, platform
+  health (API, database, MCP tool server, Kafka), and recent failures showing each failed
+  job's real error text with a link to its trace. A "needs attention" panel leads with
+  problems: unreachable database or tool server, or an error rate at or above 20%.
+  There is no metrics endpoint, so every figure is a real `total` from a `?size=1` page —
+  about a dozen small parallel requests (`/stats` would collapse them; request #9).
+- **`features/tools/tools-page` + `tools.service.ts`** — full tool registry CRUD: create,
+  edit, enable/disable from the table, soft delete, category and enabled filters,
+  debounced search, and a validated free-form JSON `config` editor. `key` is immutable
+  once created. Carries a plain statement that these rows are a **catalogue** the agent
+  pipeline never reads (request #2).
+- **`features/agents/agents-page`** + create/update/delete on `agents.service.ts` — agent
+  CRUD with name, model, description, system prompt, JSON config and active flag, plus
+  the same honesty that prompt and model are stored but unused (request #3).
+- **`features/users/users-page`** + list/get/update/delete on `users.service.ts` — user
+  management with role, active and search filters; edit name, role, active state and an
+  optional password reset. **Deleting your own account is disabled**, since a soft-delete
+  of the signed-in admin would lock you out of the admin panel.
+
+### Changed
+- **`app.routes.ts`** — added `/admin` behind `roleGuard(['admin'])`.
+- **`layout/shell`** — added an admin-only *Admin* link, and removed the top-level
+  *Create user* entry: it is now a button on the Users page. The `/users/new` route is
+  unchanged, so Milestone 10's registration screen still works.
+
+### Verified
+29 automated browser checks against the live backend, all passing:
+- **RBAC:** analyst and leadership see neither *Admin* nor *Users*; analyst is redirected
+  to `/forbidden` at `/admin`; analyst can **read** tools and agents but gets no *Add*
+  button and no per-row actions
+- **Metrics match the API exactly** — 57 jobs, 30 reports, and an error rate of
+  **12.3%** independently computed as 7 failed of 57 finished; all five statuses break
+  down (0/0/45/7/5); health reports API, database, tool server and events
+- recent failures list real errors ("Required tool 'ingestion' failed…") with attempt counts
+- **Tools:** create persisted with `config` saved as a real object (`max_results: 7`);
+  invalid JSON rejected in the form; enable/disable toggled the backend; `key` immutable
+  when editing; rename persisted; delete removed it from the registry
+- **Agents:** create persisted with `temperature: 0.1` stored as an object
+- **Users:** list renders, editing a name persisted, delete is disabled on your own
+  account, and the page links to *Create user*
+
+Production build clean, no warnings: initial 314.93 kB (92.02 kB transfer).
+`npm test` passes.
+
+### Not done (by design)
+Quotas — see above and request #12.
+
+---
+
 ## [Milestone 15 — Preview & Download] — 2026-08-03
 
 **Goal:** Editable report preview, DOCX and PDF export, and version handling.

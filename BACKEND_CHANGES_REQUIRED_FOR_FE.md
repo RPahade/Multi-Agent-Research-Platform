@@ -37,6 +37,7 @@ Everything else in this file is a non-blocking workaround or nice-to-have.
 | 9 | A single dashboard summary/counts endpoint | Low | No — 6 calls used instead |
 | 10 | CORS origin for a deployed frontend | Low | Only for non-dev deployment |
 | 11 | Clean up leftover test rows | Low | No — cosmetic |
+| 12 | Tool quotas / rate limits | Low | No — quotas deliberately not built (§12) |
 
 **Already delivered by the backend** (thank you — no action needed):
 - ✅ **Report chat** (`POST /api/v1/reports/{id}/chat`) — grounded Q&A over a report.
@@ -423,6 +424,23 @@ e.g. totals for reports/jobs/documents/agents plus a job breakdown by status.
 Already noted in `FRONTEND.md` §9. `CORS_ORIGINS` currently allows `http://localhost:4200`.
 Any non-dev deployment needs its origin added. **No action needed while developing** —
 the Angular dev server proxies `/api` to `:8000`, so requests are same-origin.
+
+---
+
+## 12. Tool quotas / rate limits — Low (feature does not exist)
+
+Frontend Milestone 16 asked for "manage tool registry **and quotas**". There is **no
+quota concept anywhere in the backend** — verified: no `quota`, `rate_limit`, `max_calls`
+or `daily_limit` in any schema, model, service or route, and no usage counters.
+
+**Decision: quotas were deliberately left unbuilt.** A quota field the frontend stores
+but nothing enforces would be a control that silently does nothing — the same trap as the
+tool `enabled` flag (§2) and `agent_id` (§3). The tool registry ships without it.
+
+**If quotas are wanted**, it is a backend feature rather than a UI one: per-tool limits
+(calls per run, per day, or a rate), usage counters, enforcement in the tool execution
+path, and exposure on the tool schema. Related to §2 — quotas only mean something once
+the pipeline actually consults the `tools` table.
 
 ---
 

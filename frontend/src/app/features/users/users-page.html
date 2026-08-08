@@ -1,0 +1,145 @@
+<div class="head">
+  <div>
+    <h1>Users</h1>
+    <p class="muted">Accounts and roles. Administrators only.</p>
+  </div>
+  <a class="btn btn-primary" routerLink="/users/new">Create user</a>
+</div>
+
+@if (notice()) {
+  <p class="form-success">{{ notice() }}</p>
+}
+@if (error()) {
+  <p class="form-error">{{ error() }}</p>
+}
+
+@if (editing(); as user) {
+  <form class="card editor" [formGroup]="form" (ngSubmit)="save()">
+    <h2>Edit {{ user.email }}</h2>
+
+    @if (saveError()) {
+      <p class="form-error">{{ saveError() }}</p>
+    }
+
+    <div class="grid">
+      <div class="field">
+        <label for="full_name">Full name</label>
+        <input id="full_name" type="text" formControlName="full_name" />
+      </div>
+
+      <div class="field">
+        <label for="role">Role</label>
+        <select id="role" formControlName="role">
+          @for (role of roles; track role) {
+            <option [value]="role">{{ role }}</option>
+          }
+        </select>
+        @if (isSelf(user)) {
+          <span class="field-hint">
+            This is your own account — changing your role takes effect immediately.
+          </span>
+        }
+      </div>
+    </div>
+
+    <div class="field checkbox">
+      <label>
+        <input type="checkbox" formControlName="is_active" />
+        Active
+      </label>
+      @if (isSelf(user)) {
+        <span class="field-hint">Deactivating your own account will sign you out.</span>
+      }
+    </div>
+
+    <div class="field">
+      <label for="password">New password</label>
+      <input id="password" type="password" formControlName="password" autocomplete="new-password" />
+      <span class="field-hint">Leave blank to keep the current password. At least 8 characters.</span>
+      @if (showError('password')) {
+        <span class="field-error">A password must be 8–72 characters.</span>
+      }
+    </div>
+
+    <div class="editor-actions">
+      <button class="btn btn-primary" type="submit" [disabled]="saving()">
+        {{ saving() ? 'Saving…' : 'Save' }}
+      </button>
+      <button class="btn" type="button" (click)="cancel()" [disabled]="saving()">Cancel</button>
+    </div>
+  </form>
+}
+
+<div class="filters">
+  <input type="search" [formControl]="qControl" placeholder="Search by name or email…" aria-label="Search users" />
+  <select [formControl]="roleControl" aria-label="Filter by role">
+    <option value="">All roles</option>
+    @for (role of roles; track role) {
+      <option [value]="role">{{ role }}</option>
+    }
+  </select>
+  <select [formControl]="activeControl" aria-label="Filter by active">
+    <option value="">Active and inactive</option>
+    <option value="true">Active only</option>
+    <option value="false">Inactive only</option>
+  </select>
+</div>
+
+@if (loading()) {
+  <p class="muted">Loading…</p>
+} @else if (items().length === 0) {
+  <app-empty-state message="No users match these filters." />
+} @else {
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Email</th>
+          <th>Name</th>
+          <th>Role</th>
+          <th>Status</th>
+          <th>Created</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (user of items(); track user.id) {
+          <tr>
+            <td>
+              {{ user.email }}
+              @if (isSelf(user)) {
+                <span class="badge">you</span>
+              }
+            </td>
+            <td>{{ user.full_name || '—' }}</td>
+            <td>{{ user.role }}</td>
+            <td><app-status-badge [status]="user.is_active ? 'active' : 'inactive'" /></td>
+            <td>{{ user.created_at | date: 'short' }}</td>
+            <td class="actions-cell">
+              <button class="btn" type="button" (click)="startEdit(user)">Edit</button>
+              <!-- Deleting your own account would lock you out of the admin panel. -->
+              <button
+                class="btn"
+                type="button"
+                (click)="remove(user)"
+                [disabled]="isSelf(user)"
+                [title]="isSelf(user) ? 'You cannot delete your own account' : 'Delete this user'"
+              >
+                Delete
+              </button>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}
+
+<app-paginator
+  [page]="page()"
+  [size]="size()"
+  [total]="total()"
+  [pages]="pages()"
+  (pageChange)="onPage($event)"
+  (sizeChange)="onSize($event)"
+/>

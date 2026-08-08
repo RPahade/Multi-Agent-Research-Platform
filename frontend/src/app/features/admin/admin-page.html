@@ -1,0 +1,170 @@
+<div class="head">
+  <div>
+    <h1>Admin</h1>
+    <p class="muted">Monitoring and configuration. Visible to administrators only.</p>
+  </div>
+  <button class="btn" type="button" (click)="load()" [disabled]="loading()">Refresh</button>
+</div>
+
+@if (error()) {
+  <p class="form-error">{{ error() }}</p>
+}
+
+@if (problems().length) {
+  <div class="card problems">
+    <h2>Needs attention</h2>
+    <ul>
+      @for (problem of problems(); track problem) {
+        <li>{{ problem }}</li>
+      }
+    </ul>
+  </div>
+}
+
+<!-- Headline numbers -->
+<div class="tiles">
+  <div class="card tile">
+    <span class="value">{{ total('jobs') }}</span>
+    <span class="label">Jobs</span>
+    <span class="hint muted">{{ statusCount('running') }} running · {{ statusCount('pending') }} queued</span>
+  </div>
+  <div class="card tile">
+    <span class="value" [class.bad]="(errorRate() ?? 0) >= 20">
+      @if (errorRate() === null) { — } @else { {{ errorRate()!.toFixed(1) }}% }
+    </span>
+    <span class="label">Error rate</span>
+    <span class="hint muted">
+      {{ statusCount('failed') }} failed of {{ terminalJobs() }} finished
+    </span>
+  </div>
+  <div class="card tile">
+    <span class="value">{{ total('reports') }}</span>
+    <span class="label">Reports</span>
+    <span class="hint muted">{{ total('documents') }} documents ingested</span>
+  </div>
+  <div class="card tile">
+    <span class="value">{{ total('users') }}</span>
+    <span class="label">Users</span>
+    <span class="hint muted">
+      {{ total('agents') }} {{ total('agents') === 1 ? 'agent' : 'agents' }} ·
+      {{ total('tools') }} {{ total('tools') === 1 ? 'tool' : 'tools' }}
+    </span>
+  </div>
+</div>
+
+<div class="columns">
+  <!-- Job breakdown -->
+  <section class="card">
+    <h2>Jobs by status</h2>
+    @if (loading()) {
+      <p class="muted">Loading…</p>
+    } @else {
+      <ul class="bars">
+        @for (status of jobStatuses; track status) {
+          <li>
+            <span class="bar-label">
+              <app-status-badge [status]="status" />
+              <span class="count">{{ statusCount(status) }}</span>
+            </span>
+            <span class="track">
+              <span class="fill" [class]="'fill-' + status" [style.width.%]="share(status)"></span>
+            </span>
+          </li>
+        }
+      </ul>
+
+      <h3>By type</h3>
+      <ul class="types">
+        @for (type of jobTypes; track type) {
+          <li><span class="type">{{ type }}</span> <span class="count">{{ typeCount(type) }}</span></li>
+        }
+      </ul>
+    }
+  </section>
+
+  <!-- Platform health -->
+  <section class="card">
+    <h2>Platform health</h2>
+    <dl>
+      <dt>API</dt>
+      <dd>
+        @if (health(); as h) {
+          <span class="badge badge-success">{{ h.status }}</span> v{{ h.version }} · {{ h.env }}
+        } @else {
+          <span class="badge badge-danger">unreachable</span>
+        }
+      </dd>
+
+      <dt>Database</dt>
+      <dd>
+        @if (dbHealth(); as db) {
+          <span class="badge" [class.badge-success]="db.status === 'ok'" [class.badge-danger]="db.status !== 'ok'">
+            {{ db.database }}
+          </span>
+        } @else {
+          <span class="badge badge-danger">unknown</span>
+        }
+      </dd>
+
+      <dt>Tool server</dt>
+      <dd>
+        @if (mcp(); as m) {
+          @if (!m.enabled) {
+            <span class="badge badge-neutral">disabled</span>
+          } @else if (m.reachable) {
+            <span class="badge badge-success">reachable</span> {{ m.tools.length }} tools
+          } @else {
+            <span class="badge badge-danger">unreachable</span>
+          }
+        } @else {
+          <span class="badge badge-neutral">unknown</span>
+        }
+      </dd>
+
+      <dt>Events</dt>
+      <dd>
+        @if (events(); as e) {
+          <span class="badge" [class.badge-success]="e.kafka_enabled" [class.badge-neutral]="!e.kafka_enabled">
+            {{ e.kafka_enabled ? 'kafka' : 'disabled' }}
+          </span>
+          @if (e.kafka_enabled) {
+            <code>{{ e.topic }}</code>
+          }
+        } @else {
+          <span class="badge badge-neutral">unknown</span>
+        }
+      </dd>
+    </dl>
+
+    <div class="admin-links">
+      <a class="btn" routerLink="/users">Manage users</a>
+      <a class="btn" routerLink="/agents">Manage agents</a>
+      <a class="btn" routerLink="/tools">Manage tools</a>
+    </div>
+  </section>
+</div>
+
+<!-- Recent failures -->
+<section class="card">
+  <h2>Recent failures</h2>
+  @if (recentFailures().length === 0) {
+    <app-empty-state message="No failed jobs — nothing to investigate." />
+  } @else {
+    <ul class="failures">
+      @for (job of recentFailures(); track job.id) {
+        <li>
+          <div class="failure-head">
+            <a [routerLink]="['/jobs', job.id]">{{ job.type }} job</a>
+            <span class="muted">{{ job.created_at | date: 'short' }}</span>
+            @if (job.attempts > 1) {
+              <span class="badge badge-warning">{{ job.attempts }} attempts</span>
+            }
+          </div>
+          @if (job.error) {
+            <p class="failure-error">{{ job.error }}</p>
+          }
+        </li>
+      }
+    </ul>
+  }
+</section>

@@ -47,7 +47,9 @@ background job and produces a cited report. Three roles — `admin` (governance)
 | 13 | Progress View — live SSE progress, per-tool status, cancel | ✅ done |
 | 14 | Report View — content, citations, versions, grounded chat | ✅ done (chat live) |
 | 15 | Preview & Download — editable preview, DOCX/PDF export, versioning | ✅ done |
-| 16 | *to be confirmed* | next |
+| 16 | Admin Panel — monitoring, tool registry, users/agents, RBAC | ✅ done |
+
+**All 8 frontend milestones (M9–M16) are complete.** No placeholder screens remain.
 
 *(The user supplies each milestone's definition; do not assume the remaining titles.
 Still unbuilt: a documents management screen, and the users/agents/tools CRUD write
@@ -65,7 +67,7 @@ screens.)*
 
 ---
 
-## 4. Current state — what EXISTS right now (after Milestone 15)
+## 4. Current state — what EXISTS right now (after Milestone 16 — the final milestone)
 
 ### Folder structure
 
@@ -104,7 +106,8 @@ frontend/
         auth/                  # LoginPage (real)
         dashboard/             # DashboardPage + reports-panel, agents-panel,
                                # activity-panel (all real)
-        users/                 # UsersPage (placeholder), CreateUserPage (real),
+        admin/                 # AdminPage — monitoring (admin-only)
+        users/                 # UsersPage (CRUD), CreateUserPage (registration),
                                # users.service.ts
         jobs/                  # JobsPage (list), JobDetailPage (live progress),
                                # NewJobPage, document-upload, pipeline-preview,
@@ -112,8 +115,9 @@ frontend/
         reports/               # ReportsPage (list), ReportDetailPage (preview +
                                # editor), report-chat, reports.service.ts,
                                # report-chat.service.ts, report-export.service.ts
-        agents/ documents/                   # placeholder pages + their API services
-        tools/ forbidden/ not-found/
+        agents/ tools/         # list + CRUD pages and their API services
+        documents/             # documents.service.ts; the page is still a placeholder
+        forbidden/ not-found/
 ```
 
 **Where API calls live:** one service per entity in its feature folder
@@ -143,10 +147,13 @@ requires a signed-in user (`authGuard` on the parent route).
 | `/jobs/new` | `NewJobPage` | auth + `roleGuard(['admin','analyst'])` | **real** — research form (M12) |
 | `/jobs/:id` | `JobDetailPage` | auth | **real** — live progress (M13) |
 | `/users/new` | `CreateUserPage` | auth + `roleGuard(['admin'])` | **real** — registration |
-| `/users` | `UsersPage` | auth + `roleGuard(['admin'])` | placeholder |
+| `/users` | `UsersPage` | auth + `roleGuard(['admin'])` | **real** — user management (M16) |
 | `/reports` | `ReportsPage` | auth | **real** — paginated list (M14) |
 | `/reports/:id` | `ReportDetailPage` | auth | **real** — content, citations, versions, chat (M14) |
-| `/documents` `/agents` `/tools` | feature pages | auth | placeholder |
+| `/agents` | `AgentsPage` | auth | **real** — CRUD, writes admin-only (M16) |
+| `/tools` | `ToolsPage` | auth | **real** — registry CRUD, writes admin-only (M16) |
+| `/admin` | `AdminPage` | auth + `roleGuard(['admin'])` | **real** — monitoring (M16) |
+| `/documents` | `DocumentsPage` | auth | placeholder — the only one left |
 | `/forbidden` | `ForbiddenPage` | auth | real |
 | `**` | `NotFoundPage` | — | real |
 
@@ -547,6 +554,21 @@ including a **real end-to-end research run**:
 - Each question is a separate `200` call to the live endpoint.
 - Leadership can chat and gets answers.
 
+**Milestone 16** — 29 automated browser checks against the live backend, all passing:
+
+- **RBAC**: analyst and leadership see neither *Admin* nor *Users*; analyst hitting
+  `/admin` lands on `/forbidden`; analyst can read tools and agents but gets no *Add*
+  button and no per-row actions.
+- **Metrics match the API exactly** — 57 jobs, 30 reports, error rate **12.3%**
+  independently computed as 7 failed of 57 finished; all five statuses break down
+  (0/0/45/7/5); health covers API, database, tool server and events.
+- **Tools**: create persisted with `config` stored as a real object; invalid JSON rejected
+  in the form; enable/disable toggled the backend; `key` immutable when editing; rename
+  persisted; delete removed it.
+- **Agents**: create persisted with `temperature: 0.1` as an object.
+- **Users**: list renders, name edit persisted, **delete disabled on your own account**,
+  and the page links to *Create user*.
+
 **Milestone 15** — 29 automated browser checks against the live backend, all passing:
 
 - Edit mode pre-fills from the report; sections load as editable rows; add, remove and
@@ -607,14 +629,18 @@ advisories, all in Angular packages (`@angular/core` ≤ 20.3.26 — XSS via eve
 attributes in `@angular/compiler`). `docx` adds none. `npm audit fix` patches within the
 existing `^20.3.0` range; not done yet because it touches the lockfile mid-milestone.
 
-**Milestone 16 is not yet defined** — the user supplies each milestone. These are the
-pieces still missing, with the groundwork already in place:
+**All 8 frontend milestones are complete.** What remains is optional, not planned work:
 
-- **Documents screen** — `documents.service.ts` has list/get/chunks/upload; a management
-  screen (list, chunk inspector, delete) is not built.
-- **CRUD write screens** for users/agents/tools — the services are read-only apart from
-  `users.create()`. Writes must be hidden from roles that cannot perform them
-  (agents/tools writes are admin-only; reports writes are analyst+admin) while all roles
-  keep read access.
+- **Documents screen** — the only feature area without its own management page.
+  `documents.service.ts` already has list/get/chunks/upload (upload is used by the
+  research form), so a list with a chunk inspector and delete would be a small addition.
+  Documents are otherwise reachable through the research form and the dashboard.
+- **Quotas** — deliberately not built; there is no backend concept to drive them
+  (`../BACKEND_CHANGES_REQUIRED_FOR_FE.md` §12).
+- **Open backend requests** — the honesty notes in the UI can be deleted as each lands:
+  the tool registry note (§2), the agent prompt/model note (§3), the client-side sorting
+  caveat (§1), and the citation-marker note (§4).
+- **Cross-tab session sync** — signing out in one tab does not sign out another until it
+  reloads. A `storage` event listener would fix it.
 
 Reuse `Paginator`, `StatusBadge` and `EmptyState` rather than rebuilding list plumbing.

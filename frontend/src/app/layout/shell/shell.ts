@@ -36,10 +36,12 @@ export class Shell {
     { path: '/jobs', label: 'Research Jobs' },
     { path: '/jobs/new', label: 'New research', roles: ['admin', 'analyst'] },
     { path: '/reports', label: 'Reports' },
-    { path: '/users', label: 'Users', roles: ['admin'] },
-    { path: '/users/new', label: 'Create user', roles: ['admin'] },
     { path: '/agents', label: 'Agents' },
     { path: '/tools', label: 'Tools' },
+    { path: '/admin', label: 'Admin', roles: ['admin'] },
+    // Create user has moved to a button on the Users page — /users/new still
+    // works, it just no longer needs its own top-level nav entry.
+    { path: '/users', label: 'Users', roles: ['admin'] },
   ];
 
   /** Only the links the signed-in role is allowed to see. */

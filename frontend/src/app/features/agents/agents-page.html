@@ -1,0 +1,143 @@
+<div class="head">
+  <div>
+    <h1>Agents</h1>
+    <p class="muted">Agent definitions — prompt, model and configuration.</p>
+  </div>
+  @if (canWrite()) {
+    <button class="btn btn-primary" type="button" (click)="startCreate()">Add agent</button>
+  }
+</div>
+
+<!-- Same honesty as the agent picker on the research form. -->
+<p class="field-hint registry-note">
+  An agent's <strong>prompt and model are stored but not yet used</strong>: nothing in the
+  backend's execution path reads the agent row, so choosing an agent for a research job
+  does not change the result. Tracked as request #3 in
+  <code>BACKEND_CHANGES_REQUIRED_FOR_FE.md</code>.
+</p>
+
+@if (notice()) {
+  <p class="form-success">{{ notice() }}</p>
+}
+@if (error()) {
+  <p class="form-error">{{ error() }}</p>
+}
+
+@if (editing()) {
+  <form class="card editor" [formGroup]="form" (ngSubmit)="save()">
+    <h2>{{ isNew() ? 'Add an agent' : 'Edit agent' }}</h2>
+
+    @if (saveError()) {
+      <p class="form-error">{{ saveError() }}</p>
+    }
+
+    <div class="grid">
+      <div class="field">
+        <label for="name">Name</label>
+        <input id="name" type="text" formControlName="name" maxlength="255" />
+        @if (showError('name')) {
+          <span class="field-error">A name is required.</span>
+        }
+      </div>
+
+      <div class="field">
+        <label for="model">Model</label>
+        <input id="model" type="text" formControlName="model" maxlength="100" placeholder="gemini-flash-latest" />
+        <span class="field-hint">Model names are provider- and key-specific.</span>
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="description">Description</label>
+      <input id="description" type="text" formControlName="description" />
+    </div>
+
+    <div class="field">
+      <label for="system_prompt">System prompt</label>
+      <textarea id="system_prompt" formControlName="system_prompt" rows="4"></textarea>
+    </div>
+
+    <div class="field">
+      <label for="config">Config (JSON)</label>
+      <textarea id="config" formControlName="config" rows="4" spellcheck="false"></textarea>
+      @if (showError('config')) {
+        <span class="field-error">{{ form.controls.config.errors?.['json'] }}</span>
+      }
+    </div>
+
+    <div class="field checkbox">
+      <label>
+        <input type="checkbox" formControlName="is_active" />
+        Active
+      </label>
+    </div>
+
+    <div class="editor-actions">
+      <button class="btn btn-primary" type="submit" [disabled]="saving()">
+        {{ saving() ? 'Saving…' : 'Save' }}
+      </button>
+      <button class="btn" type="button" (click)="cancel()" [disabled]="saving()">Cancel</button>
+    </div>
+  </form>
+}
+
+<div class="filters">
+  <input type="search" [formControl]="qControl" placeholder="Search agents…" aria-label="Search agents" />
+  <select [formControl]="activeControl" aria-label="Filter by active">
+    <option value="">Active and inactive</option>
+    <option value="true">Active only</option>
+    <option value="false">Inactive only</option>
+  </select>
+</div>
+
+@if (loading()) {
+  <p class="muted">Loading…</p>
+} @else if (items().length === 0) {
+  <app-empty-state message="No agents match these filters." />
+} @else {
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Model</th>
+          <th>Status</th>
+          <th class="num">Version</th>
+          @if (canWrite()) {
+            <th>Actions</th>
+          }
+        </tr>
+      </thead>
+      <tbody>
+        @for (agent of items(); track agent.id) {
+          <tr>
+            <td>
+              <span class="name">{{ agent.name }}</span>
+              @if (agent.description) {
+                <span class="muted desc">{{ agent.description }}</span>
+              }
+            </td>
+            <td>{{ agent.model || '—' }}</td>
+            <td><app-status-badge [status]="agent.is_active ? 'active' : 'inactive'" /></td>
+            <td class="num">{{ agent.version }}</td>
+            @if (canWrite()) {
+              <td class="actions-cell">
+                <button class="btn" type="button" (click)="startEdit(agent)">Edit</button>
+                <button class="btn" type="button" (click)="remove(agent)">Delete</button>
+              </td>
+            }
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}
+
+<app-paginator
+  [page]="page()"
+  [size]="size()"
+  [total]="total()"
+  [pages]="pages()"
+  (pageChange)="onPage($event)"
+  (sizeChange)="onSize($event)"
+/>

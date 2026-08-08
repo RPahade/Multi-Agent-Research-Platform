@@ -101,6 +101,13 @@ export const routes: Routes = [
           import('./features/tools/tools-page').then((m) => m.ToolsPage),
       },
       {
+        path: 'admin',
+        title: 'Admin',
+        canActivate: [roleGuard(['admin'])],
+        loadComponent: () =>
+          import('./features/admin/admin-page').then((m) => m.AdminPage),
+      },
+      {
         path: 'forbidden',
         title: 'Not allowed',
         loadComponent: () =>
